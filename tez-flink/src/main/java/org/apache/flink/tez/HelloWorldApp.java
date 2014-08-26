@@ -1,11 +1,16 @@
 package org.apache.flink.tez;
 
-
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.security.Credentials;
+import org.apache.hadoop.yarn.api.records.LocalResource;
 import org.apache.tez.client.TezClient;
+import org.apache.tez.common.TezRuntimeFrameworkConfigs;
 import org.apache.tez.dag.api.DAG;
 import org.apache.tez.dag.api.DataSinkDescriptor;
 import org.apache.tez.dag.api.Edge;
@@ -16,6 +21,7 @@ import org.apache.tez.dag.api.Vertex;
 import org.apache.tez.dag.api.client.DAGClient;
 import org.apache.tez.dag.api.client.DAGStatus;
 import org.apache.tez.mapreduce.output.MROutput;
+import org.apache.tez.mapreduce.processor.SimpleMRProcessor;
 import org.apache.tez.runtime.api.LogicalInput;
 import org.apache.tez.runtime.api.LogicalOutput;
 import org.apache.tez.runtime.api.ProcessorContext;
@@ -24,12 +30,19 @@ import org.apache.tez.runtime.api.Writer;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
+import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.input.UnorderedKVInput;
 import org.apache.tez.runtime.library.output.UnorderedKVOutput;
+import org.apache.tez.runtime.library.partitioner.HashPartitioner;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
 
+import java.io.IOException;
+import java.util.Map;
+
 public class HelloWorldApp {
+
+	public static boolean localExecution = true;
 
 	public static final class Stage1Vertex extends SimpleProcessor {
 
@@ -65,7 +78,10 @@ public class HelloWorldApp {
 		}
 	}
 
-	public static final class Stage2Vertex extends SimpleProcessor {
+	public static final class Stage2Vertex extends SimpleMRProcessor {
+
+		//private static final Log LOG = LogFactory.getLog(Stage2Vertex.class);
+
 
 		public Stage2Vertex(ProcessorContext context) {
 			super(context);
@@ -73,6 +89,8 @@ public class HelloWorldApp {
 
 		@Override
 		public void run() throws Exception {
+
+			String[] workingDirs = this.getContext().getWorkDirs();
 
 			if ((getOutputs().size() != 1) || (getInputs().size() != 1)) {
 				throw new IllegalStateException("Stage 2 must have one input and one output.");
@@ -95,10 +113,8 @@ public class HelloWorldApp {
 			Object key = kvReader.getCurrentKey();
 			Object value = kvReader.getCurrentValue();
 
-
-			System.out.println(value);
-			System.out.println("The answer to life, the universe, and everything is: " + key);
-
+			//LOG.info(value);
+			//LOG.info("The answer to life, the universe, and everything is: " + key);
 
 			LogicalOutput lo = getOutputs().values().iterator().next();
 
@@ -114,53 +130,88 @@ public class HelloWorldApp {
 
 			KeyValueWriter kvWriter = (KeyValueWriter) rawWriter;
 
+			kvWriter.write(new LongWritable(36), "Hello, Tez\n");
 			kvWriter.write(key, value);
 		}
 	}
 
-	public static DAG createDAG (TezConfiguration tezConf) throws Exception{
+	public static DAG createDAG (TezConfiguration tezConf, Map<String, LocalResource> localResources) throws Exception {
 
 		DataSinkDescriptor dataSink = MROutput.createConfigurer(new Configuration(tezConf),
-				TextOutputFormat.class, "/tmp/helloworldoutput3/").create();
+				TextOutputFormat.class, "/tmp/helloworldoutput11/").create();
 
-		Vertex helloWriter = new Vertex("HelloWriter",
+		Vertex stage1Vertex = new Vertex("Stage1Vertex",
 				new ProcessorDescriptor(Stage1Vertex.class.getName()),
 				1);
 
-		Vertex helloReader = new Vertex("HelloReader",
+		if (localResources != null)
+			stage1Vertex.setTaskLocalFiles(localResources);
+
+		Vertex stage2Vertex = new Vertex("Stage2Vertex",
 				new ProcessorDescriptor(Stage2Vertex.class.getName()),
 				1)
 				.addDataSink("Output", dataSink);
+
+		if (localResources != null)
+			stage2Vertex.setTaskLocalFiles(localResources);
 
 		UnorderedKVEdgeConfigurer edgeConf = UnorderedKVEdgeConfigurer
 				.newBuilder(LongWritable.class.getName(), Text.class.getName()).build();
 
 		EdgeProperty edgeProperty = edgeConf.createDefaultOneToOneEdgeProperty();
 
-		Edge edge = new Edge (helloWriter, helloReader, edgeProperty);
+
+		Edge edge = new Edge (stage1Vertex, stage2Vertex, edgeProperty);
 
 		DAG dag = new DAG ("HelloWorldDAG");
 
-		dag.addVertex(helloWriter).addVertex(helloReader).addEdge(edge);
+		dag.addVertex(stage1Vertex).addVertex(stage2Vertex).addEdge(edge);
 
 		return dag;
 	}
 
 
+	public static void configureLocal (TezConfiguration tezConf) {
+		tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
+		tezConf.set("fs.defaultFS", "file:///");
+		tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
+	}
+
+	public static Map<String, LocalResource> configureYarn (TezConfiguration tezConf) {
+		try {
+			String jarPath = "/Users/kostas/Desktop/hello_world_app.jar";
+
+			TezUtils.setTezTimeoutsHigh(tezConf);
+			TezUtils.addAllTezConfigResources(tezConf);
+			Credentials credentials = new Credentials();
+			FileSystem fs = FileSystem.get(tezConf);
+			return TezUtils.prepareConfigForExecutionWithJar(jarPath, tezConf, credentials, fs);
+		}
+		catch (IOException e) {
+			System.err.println ("Unable to configure job for remote execution");
+			System.exit(1);
+		}
+		return null;
+	}
 
 	public static void main (String [] args) {
 		try {
 			final TezConfiguration tezConf = new TezConfiguration();
 
-			tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
-			tezConf.set("fs.defaultFS", "file:///");
-			tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
+			Map<String, LocalResource> localResources = null;
+			if (localExecution) {
+				configureLocal(tezConf);
+			}
+			else {
+				localResources = configureYarn(tezConf);
+			}
 
-			TezClient tezClient = new TezClient("HelloWorld", tezConf);
+			TezClient tezClient = new TezClient("HelloWorldApp", tezConf);
 			tezClient.start();
 
+
 			try {
-				DAG dag = createDAG(tezConf);
+				DAG dag = createDAG(tezConf, localResources);
 
 				tezClient.waitTillReady();
 				System.out.println("Submitting DAG to Tez Client");
@@ -168,14 +219,13 @@ public class HelloWorldApp {
 				System.out.println("Submitted DAG to Tez Client");
 
 				// monitoring
-				//DAGStatus dagStatus = dagClient.waitForCompletionWithStatusUpdates(null);
 				DAGStatus dagStatus = dagClient.waitForCompletion();
 
 				if (dagStatus.getState() != DAGStatus.State.SUCCEEDED) {
-					System.out.println("LocalOrderedWordCount failed with diagnostics: " + dagStatus.getDiagnostics());
+					System.out.println("HelloWorldApp failed with diagnostics: " + dagStatus.getDiagnostics());
 					System.exit(1);
 				}
-				System.out.println("LocalOrderedWordCount finished successfully");
+				System.out.println("HelloWorldApp finished successfully");
 				System.exit(0);
 			} catch (Exception e) {
 				e.printStackTrace();

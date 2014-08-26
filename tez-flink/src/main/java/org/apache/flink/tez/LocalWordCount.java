@@ -1,25 +1,7 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.apache.flink.tez;
 
-import java.io.IOException;
 
+import com.google.common.base.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
@@ -35,32 +17,54 @@ import org.apache.tez.dag.api.TezConfiguration;
 import org.apache.tez.dag.api.Vertex;
 import org.apache.tez.dag.api.client.DAGClient;
 import org.apache.tez.dag.api.client.DAGStatus;
-import org.apache.tez.examples.WordCount;
 import org.apache.tez.mapreduce.input.MRInput;
 import org.apache.tez.mapreduce.output.MROutput;
 import org.apache.tez.mapreduce.processor.SimpleMRProcessor;
 import org.apache.tez.runtime.api.ProcessorContext;
+import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.KeyValuesReader;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.partitioner.HashPartitioner;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
 
-import com.google.common.base.Preconditions;
+import java.io.IOException;
+import java.util.StringTokenizer;
 
-/**
- * Simple example that extends the WordCount example to show a chain of processing.
- * The example extends WordCount by sorting the words by their count.
- */
 public class LocalWordCount {
 
-	/*
-	   * SumProcessor similar to WordCount except that it writes the count as key and the
-	   * word as value. This is because we can and ordered partitioned key value edge to group the
-	   * words with the same count (as key) and order the counts.
-	   */
-	public static class SumProcessor extends SimpleProcessor {
+	public static class TokenProcessor extends SimpleProcessor {
+		IntWritable one = new IntWritable(1);
+		Text word1 = new Text("hello, ");
+		Text word2 = new Text("hello, ");
+		Text word3 = new Text("tez");
+		Text word4 = new Text("tez");
+		Text word5 = new Text("tez");
+
+
+		public TokenProcessor(ProcessorContext context) {
+			super(context);
+		}
+
+		@Override
+		public void run() throws Exception {
+			Preconditions.checkArgument(getInputs().size() == 0);
+			Preconditions.checkArgument(getOutputs().size() == 1);
+
+			KeyValueWriter kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
+
+			kvWriter.write(word1, one);
+			kvWriter.write(word2, one);
+			kvWriter.write(word3, one);
+			kvWriter.write(word4, one);
+			kvWriter.write(word5, one);
+		}
+
+	}
+
+	public static class SumProcessor extends SimpleMRProcessor {
 		public SumProcessor(ProcessorContext context) {
 			super(context);
 		}
@@ -77,126 +81,84 @@ public class LocalWordCount {
 				for (Object value : kvReader.getCurrentValues()) {
 					sum += ((IntWritable) value).get();
 				}
-				// write the sum as the key and the word as the value
-				kvWriter.write(new IntWritable(sum), word);
+				kvWriter.write(word, new IntWritable(sum));
 			}
 		}
 	}
 
-	/**
-	 * No-op sorter processor. It does not need to apply any logic since the ordered partitioned edge
-	 * ensures that we get the data sorted and grouped by the the sum key.
-	 */
-	public static class NoOpSorter extends SimpleMRProcessor {
-
-		public NoOpSorter(ProcessorContext context) {
-			super(context);
-		}
-
-		@Override
-		public void run() throws Exception {
-			Preconditions.checkArgument(getInputs().size() == 1);
-			Preconditions.checkArgument(getOutputs().size() == 1);
-			KeyValueWriter kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
-			KeyValuesReader kvReader = (KeyValuesReader) getInputs().values().iterator().next().getReader();
-			while (kvReader.next()) {
-				Object sum = kvReader.getCurrentKey();
-				for (Object word : kvReader.getCurrentValues()) {
-					kvWriter.write(word, sum);
-				}
-			}
-			// deriving from SimpleMRProcessor takes care of committing the output
-		}
-	}
-
-	public static DAG createDAG(TezConfiguration tezConf, String inputPath, String outputPath,
-								int numPartitions, String dagName) throws IOException {
-
-		DataSourceDescriptor dataSource = MRInput.createConfigurer(new Configuration(tezConf),
-				TextInputFormat.class, inputPath).create();
+	private static DAG createDAG(TezConfiguration tezConf, String outputPath,
+						  int numPartitions) throws IOException {
 
 		DataSinkDescriptor dataSink = MROutput.createConfigurer(new Configuration(tezConf),
 				TextOutputFormat.class, outputPath).create();
 
 		Vertex tokenizerVertex = new Vertex("Tokenizer", new ProcessorDescriptor(
-				WordCount.TokenProcessor.class.getName()));
-		tokenizerVertex.addDataSource("MRInput", dataSource);
+				TokenProcessor.class.getName()),
+				numPartitions);
 
-		// Use Text key and IntWritable value to bring counts for each word in the same partition
-		OrderedPartitionedKVEdgeConfigurer summationEdgeConf = OrderedPartitionedKVEdgeConfigurer
+		OrderedPartitionedKVEdgeConfigurer edgeConf = OrderedPartitionedKVEdgeConfigurer
 				.newBuilder(Text.class.getName(), IntWritable.class.getName(),
 						HashPartitioner.class.getName()).build();
 
-		// This vertex will be reading intermediate data via an input edge and writing intermediate data
-		// via an output edge.
-		Vertex summationVertex = new Vertex("Summation", new ProcessorDescriptor(
-				SumProcessor.class.getName()), numPartitions);
+		UnorderedKVEdgeConfigurer simpleEdgeConf = UnorderedKVEdgeConfigurer
+				.newBuilder(Text.class.getName(), IntWritable.class.getName()).build();
 
-		// Use IntWritable key and Text value to bring all words with the same count in the same
-		// partition. The data will be ordered by count and words grouped by count.
-		OrderedPartitionedKVEdgeConfigurer sorterEdgeConf = OrderedPartitionedKVEdgeConfigurer
-				.newBuilder(IntWritable.class.getName(), Text.class.getName(),
-						HashPartitioner.class.getName()).build();
+		Vertex summationVertex = new Vertex("Summation",
+				new ProcessorDescriptor(SumProcessor.class.getName()),
+				numPartitions).addDataSink("Output", dataSink);
 
-		// Use 1 task to bring all the data in one place for global sorted order. Essentially the number
-		// of partitions is 1. So the NoOpSorter can be used to produce the globally ordered output
-		Vertex sorterVertex = new Vertex("Sorter", new ProcessorDescriptor(
-				NoOpSorter.class.getName()), 1);
-		sorterVertex.addDataSink("MROutput", dataSink);
+		// No need to add jar containing this class as assumed to be part of the Tez jars. Otherwise
+		// we would have to add the jars for this code as local files to the vertices.
 
-		// No need to add jar containing this class as assumed to be part of the tez jars.
-
-		DAG dag = new DAG(dagName);
+		DAG dag = new DAG("WordCount");
 		dag.addVertex(tokenizerVertex)
 				.addVertex(summationVertex)
-				.addVertex(sorterVertex)
 				.addEdge(
-						new Edge(tokenizerVertex, summationVertex, summationEdgeConf.createDefaultEdgeProperty()))
-				.addEdge(
-						new Edge(summationVertex, sorterVertex, sorterEdgeConf.createDefaultEdgeProperty()));
+						new Edge(tokenizerVertex, summationVertex,
+								//edgeConf.createDefaultEdgeProperty()
+								simpleEdgeConf.createDefaultBroadcastEdgeProperty()
+						));
 		return dag;
 	}
 
-	public static void main(String[] args) throws Exception {
-		runLocally();
-	}
-
-	public static void runLocally () throws Exception {
-		final TezConfiguration tezConf = new TezConfiguration();
-
-		tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
-		tezConf.set("fs.defaultFS", "file:///");
-		tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
-
-		TezClient tezClient = new TezClient("OrderedWordCount", tezConf);
-		tezClient.start();
-
+	public static void main (String [] args) {
 		try {
-			DAG dag = createDAG(tezConf, "/Users/kostas/localfs/hamlet.txt",
-					"/Users/kostas/localfs/wc", 1, "LocalOrderedWordCount");
+			final TezConfiguration tezConf = new TezConfiguration();
 
-			tezClient.waitTillReady();
-			System.out.println("Submitting DAG to Tez Client");
-			DAGClient dagClient = tezClient.submitDAG(dag);
-			System.out.println("Submitted DAG to Tez Client");
+			tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
+			tezConf.set("fs.defaultFS", "file:///");
+			tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
 
-			// monitoring
-			//DAGStatus dagStatus = dagClient.waitForCompletionWithStatusUpdates(null);
-			DAGStatus dagStatus = dagClient.waitForCompletion();
+			TezClient tezClient = new TezClient("LocalWordCount", tezConf);
+			tezClient.start();
 
-			if (dagStatus.getState() != DAGStatus.State.SUCCEEDED) {
-				System.out.println("LocalOrderedWordCount failed with diagnostics: " + dagStatus.getDiagnostics());
-				System.exit(1);
+
+			try {
+				DAG dag = createDAG(tezConf, args[0], 1);
+
+				tezClient.waitTillReady();
+				System.out.println("Submitting DAG to Tez Client");
+				DAGClient dagClient = tezClient.submitDAG(dag);
+				System.out.println("Submitted DAG to Tez Client");
+
+				// monitoring
+				DAGStatus dagStatus = dagClient.waitForCompletion();
+
+				if (dagStatus.getState() != DAGStatus.State.SUCCEEDED) {
+					System.out.println("HelloWorldApp failed with diagnostics: " + dagStatus.getDiagnostics());
+					System.exit(1);
+				}
+				System.out.println("HelloWorldApp finished successfully");
+				System.exit(0);
+			} catch (Exception e) {
+				e.printStackTrace();
+			} finally {
+				tezClient.stop();
 			}
-			System.out.println("LocalOrderedWordCount finished successfully");
-			System.exit(0);
 		}
 		catch (Exception e) {
 			e.printStackTrace();
-		}
-		finally {
-			tezClient.stop();
+			System.exit(1);
 		}
 	}
 }
-
