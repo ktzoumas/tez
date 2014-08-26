@@ -1,7 +1,5 @@
 package org.apache.flink.tez;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.LongWritable;
@@ -10,7 +8,6 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.yarn.api.records.LocalResource;
 import org.apache.tez.client.TezClient;
-import org.apache.tez.common.TezRuntimeFrameworkConfigs;
 import org.apache.tez.dag.api.DAG;
 import org.apache.tez.dag.api.DataSinkDescriptor;
 import org.apache.tez.dag.api.Edge;
@@ -30,11 +27,9 @@ import org.apache.tez.runtime.api.Writer;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
-import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.input.UnorderedKVInput;
 import org.apache.tez.runtime.library.output.UnorderedKVOutput;
-import org.apache.tez.runtime.library.partitioner.HashPartitioner;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
 
 import java.io.IOException;
@@ -80,8 +75,6 @@ public class HelloWorldApp {
 
 	public static final class Stage2Vertex extends SimpleMRProcessor {
 
-		//private static final Log LOG = LogFactory.getLog(Stage2Vertex.class);
-
 
 		public Stage2Vertex(ProcessorContext context) {
 			super(context);
@@ -113,8 +106,7 @@ public class HelloWorldApp {
 			Object key = kvReader.getCurrentKey();
 			Object value = kvReader.getCurrentValue();
 
-			//LOG.info(value);
-			//LOG.info("The answer to life, the universe, and everything is: " + key);
+			// Both key and value are null
 
 			LogicalOutput lo = getOutputs().values().iterator().next();
 
