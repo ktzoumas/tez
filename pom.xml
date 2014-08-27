@@ -607,6 +607,7 @@
     <module>tez-tests</module>
     <module>tez-dag</module>
     <module>tez-plugins</module>
+    <module>tez-simple-app</module>
     <module>tez-dist</module>
     <module>docs</module>
   </modules>
