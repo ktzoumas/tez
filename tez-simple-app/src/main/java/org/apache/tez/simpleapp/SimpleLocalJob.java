@@ -101,8 +101,6 @@ public class SimpleLocalJob {
 				value = kvReader.getCurrentValue();
 			}
 
-			// Both key and value are null
-
 			LogicalOutput lo = getOutputs().values().iterator().next();
 
 			if (!(lo instanceof MROutput)) {
