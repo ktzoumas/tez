@@ -138,7 +138,9 @@ public class SimpleLocalJob {
 
 
 		UnorderedKVEdgeConfigurer edgeConf = UnorderedKVEdgeConfigurer
-				.newBuilder(LongWritable.class.getName(), Text.class.getName()).build();
+				.newBuilder(LongWritable.class.getName(), Text.class.getName())
+				.setFromConfiguration(tezConf)
+				.build();
 
 		EdgeProperty edgeProperty = edgeConf.createDefaultOneToOneEdgeProperty();
 
