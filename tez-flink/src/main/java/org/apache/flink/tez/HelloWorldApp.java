@@ -1,5 +1,7 @@
 package org.apache.flink.tez;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.LongWritable;
@@ -27,10 +29,13 @@ import org.apache.tez.runtime.api.Writer;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
+import org.apache.tez.runtime.library.common.readers.UnorderedKVReader;
+import org.apache.tez.runtime.library.common.sort.impl.IFile;
 import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.input.UnorderedKVInput;
 import org.apache.tez.runtime.library.output.UnorderedKVOutput;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
+import org.apache.tez.runtime.library.shuffle.common.FetchedInput;
 
 import java.io.IOException;
 import java.util.Map;
@@ -75,6 +80,7 @@ public class HelloWorldApp {
 
 	public static final class Stage2Vertex extends SimpleMRProcessor {
 
+		private static final Log LOG = LogFactory.getLog(Stage2Vertex.class);
 
 		public Stage2Vertex(ProcessorContext context) {
 			super(context);
@@ -97,14 +103,23 @@ public class HelloWorldApp {
 
 			Reader rawReader = li.getReader();
 
-			if (!(rawReader instanceof  KeyValueReader)) {
+			if (!(rawReader instanceof UnorderedKVReader)) {
 				throw new IllegalStateException("Reader must be of KeyValueReader type");
 			}
 
-			KeyValueReader kvReader = (KeyValueReader) rawReader;
+			UnorderedKVReader kvReader = (UnorderedKVReader) rawReader;
 
-			Object key = kvReader.getCurrentKey();
-			Object value = kvReader.getCurrentValue();
+			Object key = null;
+			Object value = null;
+
+			if (kvReader.next()) {
+				key = kvReader.getCurrentKey();
+				value = kvReader.getCurrentValue();
+				LOG.info ("Stage 2 received key " + key + " and value " + value);
+			}
+			else {
+				throw new IllegalStateException("Stage 2 did not receive any input");
+			}
 
 			// Both key and value are null
 
@@ -130,7 +145,7 @@ public class HelloWorldApp {
 	public static DAG createDAG (TezConfiguration tezConf, Map<String, LocalResource> localResources) throws Exception {
 
 		DataSinkDescriptor dataSink = MROutput.createConfigurer(new Configuration(tezConf),
-				TextOutputFormat.class, "/tmp/helloworldoutput11/").create();
+				TextOutputFormat.class, "/tmp/helloworldoutput12/").create();
 
 		Vertex stage1Vertex = new Vertex("Stage1Vertex",
 				new ProcessorDescriptor(Stage1Vertex.class.getName()),
