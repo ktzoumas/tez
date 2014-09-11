@@ -1,4 +1,4 @@
-package org.apache.flink.tez;
+package org.apache.flink.tez.oldstuff;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -26,16 +26,13 @@ import org.apache.tez.runtime.api.LogicalOutput;
 import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.api.Reader;
 import org.apache.tez.runtime.api.Writer;
-import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 import org.apache.tez.runtime.library.common.readers.UnorderedKVReader;
-import org.apache.tez.runtime.library.common.sort.impl.IFile;
 import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.input.UnorderedKVInput;
 import org.apache.tez.runtime.library.output.UnorderedKVOutput;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
-import org.apache.tez.runtime.library.shuffle.common.FetchedInput;
 
 import java.io.IOException;
 import java.util.Map;
@@ -137,7 +134,7 @@ public class HelloWorldApp {
 
 			KeyValueWriter kvWriter = (KeyValueWriter) rawWriter;
 
-			kvWriter.write(new LongWritable(36), "Hello, Tez\n");
+			kvWriter.write(new LongWritable(36), "Hello, Tez");
 			kvWriter.write(key, value);
 		}
 	}
@@ -163,7 +160,9 @@ public class HelloWorldApp {
 			stage2Vertex.setTaskLocalFiles(localResources);
 
 		UnorderedKVEdgeConfigurer edgeConf = UnorderedKVEdgeConfigurer
-				.newBuilder(LongWritable.class.getName(), Text.class.getName()).build();
+				.newBuilder(LongWritable.class.getName(), Text.class.getName())
+				.setFromConfiguration(tezConf)
+				.build();
 
 		EdgeProperty edgeProperty = edgeConf.createDefaultOneToOneEdgeProperty();
 
