@@ -92,7 +92,6 @@ import org.apache.tez.dag.app.dag.event.VertexEventTaskReschedule;
 import org.apache.tez.dag.app.dag.event.VertexEventType;
 import org.apache.tez.dag.app.dag.impl.TestVertexImpl.CountingOutputCommitter;
 import org.apache.tez.common.security.ACLManager;
-import org.apache.tez.common.security.Groups;
 import org.apache.tez.dag.history.HistoryEventHandler;
 import org.apache.tez.dag.records.TezDAGID;
 import org.apache.tez.dag.records.TezTaskID;
@@ -349,31 +348,31 @@ public class TestDAGImpl {
     LOG.info("Setting up group dag plan");
     int dummyTaskCount = 1;
     Resource dummyTaskResource = Resource.newInstance(1, 1);
-    org.apache.tez.dag.api.Vertex v1 = new org.apache.tez.dag.api.Vertex("vertex1",
-        new ProcessorDescriptor("Processor"),
+    org.apache.tez.dag.api.Vertex v1 = org.apache.tez.dag.api.Vertex.create("vertex1",
+        ProcessorDescriptor.create("Processor"),
         dummyTaskCount, dummyTaskResource);
-    org.apache.tez.dag.api.Vertex v2 = new org.apache.tez.dag.api.Vertex("vertex2",
-        new ProcessorDescriptor("Processor"),
+    org.apache.tez.dag.api.Vertex v2 = org.apache.tez.dag.api.Vertex.create("vertex2",
+        ProcessorDescriptor.create("Processor"),
         dummyTaskCount, dummyTaskResource);
-    org.apache.tez.dag.api.Vertex v3 = new org.apache.tez.dag.api.Vertex("vertex3",
-        new ProcessorDescriptor("Processor"),
+    org.apache.tez.dag.api.Vertex v3 = org.apache.tez.dag.api.Vertex.create("vertex3",
+        ProcessorDescriptor.create("Processor"),
         dummyTaskCount, dummyTaskResource);
 
-    DAG dag = new DAG("testDag");
+    DAG dag = DAG.create("testDag");
     String groupName1 = "uv12";
-    OutputCommitterDescriptor ocd = new OutputCommitterDescriptor(
+    OutputCommitterDescriptor ocd = OutputCommitterDescriptor.create(
         TotalCountingOutputCommitter.class.getName());
     org.apache.tez.dag.api.VertexGroup uv12 = dag.createVertexGroup(groupName1, v1, v2);
-    OutputDescriptor outDesc = new OutputDescriptor("output.class");
+    OutputDescriptor outDesc = OutputDescriptor.create("output.class");
     uv12.addDataSink("uvOut", new DataSinkDescriptor(outDesc, ocd, null));
     v3.addDataSink("uvOut", new DataSinkDescriptor(outDesc, ocd, null));
 
-    GroupInputEdge e1 = new GroupInputEdge(uv12, v3,
-        new EdgeProperty(DataMovementType.SCATTER_GATHER,
+    GroupInputEdge e1 = GroupInputEdge.create(uv12, v3,
+        EdgeProperty.create(DataMovementType.SCATTER_GATHER,
             DataSourceType.PERSISTED, SchedulingType.SEQUENTIAL,
-            new OutputDescriptor("dummy output class"),
-            new InputDescriptor("dummy input class")),
-            new InputDescriptor("merge.class"));
+            OutputDescriptor.create("dummy output class"),
+            InputDescriptor.create("dummy input class")),
+        InputDescriptor.create("merge.class"));
 
     dag.addVertex(v1);
     dag.addVertex(v2);
@@ -615,7 +614,7 @@ public class TestDAGImpl {
     fsTokens = new Credentials();
     appContext = mock(AppContext.class);
     historyEventHandler = mock(HistoryEventHandler.class);
-    aclManager = new ACLManager(mock(Groups.class), "amUser");
+    aclManager = new ACLManager("amUser");
     doReturn(conf).when(appContext).getAMConf();
     doReturn(appAttemptId).when(appContext).getApplicationAttemptId();
     doReturn(appAttemptId.getApplicationId()).when(appContext).getApplicationID();

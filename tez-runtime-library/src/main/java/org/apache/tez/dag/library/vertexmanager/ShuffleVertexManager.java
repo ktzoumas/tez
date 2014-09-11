@@ -18,7 +18,9 @@
 
 package org.apache.tez.dag.library.vertexmanager;
 
+import com.google.protobuf.ByteString;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -148,7 +150,7 @@ public class ShuffleVertexManager extends VertexManagerPlugin {
       // Nothing to do. This class isn't currently designed to be used at the DAG API level.
       UserPayload userPayload = getContext().getUserPayload();
       if (userPayload == null || userPayload.getPayload() == null ||
-          userPayload.getPayload().length == 0) {
+          userPayload.getPayload().limit() == 0) {
         throw new RuntimeException("Could not initialize CustomShuffleEdgeManager"
             + " from provided user payload");
       }
@@ -278,19 +280,20 @@ public class ShuffleVertexManager extends VertexManagerPlugin {
     }
 
     public UserPayload toUserPayload() {
-      return new UserPayload(ShuffleEdgeManagerConfigPayloadProto.newBuilder()
-          .setNumSourceTaskOutputs(numSourceTaskOutputs)
-          .setNumDestinationTasks(numDestinationTasks)
-          .setBasePartitionRange(basePartitionRange)
-          .setRemainderRangeForLastShuffler(remainderRangeForLastShuffler)
-          .setNumSourceTasks(numSourceTasks)
-          .build().toByteArray());
+      return UserPayload.create(
+          ByteBuffer.wrap(ShuffleEdgeManagerConfigPayloadProto.newBuilder()
+              .setNumSourceTaskOutputs(numSourceTaskOutputs)
+              .setNumDestinationTasks(numDestinationTasks)
+              .setBasePartitionRange(basePartitionRange)
+              .setRemainderRangeForLastShuffler(remainderRangeForLastShuffler)
+              .setNumSourceTasks(numSourceTasks)
+              .build().toByteArray()));
     }
 
     public static CustomShuffleEdgeManagerConfig fromUserPayload(
         UserPayload payload) throws InvalidProtocolBufferException {
       ShuffleEdgeManagerConfigPayloadProto proto =
-          ShuffleEdgeManagerConfigPayloadProto.parseFrom(payload.getPayload());
+          ShuffleEdgeManagerConfigPayloadProto.parseFrom(ByteString.copyFrom(payload.getPayload()));
       return new CustomShuffleEdgeManagerConfig(
           proto.getNumSourceTaskOutputs(),
           proto.getNumDestinationTasks(),
@@ -346,7 +349,7 @@ public class ShuffleVertexManager extends VertexManagerPlugin {
       // save output size
       VertexManagerEventPayloadProto proto;
       try {
-        proto = VertexManagerEventPayloadProto.parseFrom(vmEvent.getUserPayload());
+        proto = VertexManagerEventPayloadProto.parseFrom(ByteString.copyFrom(vmEvent.getUserPayload()));
       } catch (InvalidProtocolBufferException e) {
         throw new TezUncheckedException(e);
       }
@@ -438,7 +441,7 @@ public class ShuffleVertexManager extends VertexManagerPlugin {
                 ((remainderRangeForLastShuffler > 0) ?
                     remainderRangeForLastShuffler : basePartitionRange));
         EdgeManagerPluginDescriptor edgeManagerDescriptor =
-            new EdgeManagerPluginDescriptor(CustomShuffleEdgeManager.class.getName());
+            EdgeManagerPluginDescriptor.create(CustomShuffleEdgeManager.class.getName());
         edgeManagerDescriptor.setUserPayload(edgeManagerConfig.toUserPayload());
         edgeManagers.put(vertex, edgeManagerDescriptor);
       }
@@ -608,19 +611,19 @@ public class ShuffleVertexManager extends VertexManagerPlugin {
    *          then pass in a {@link Configuration} that is initialized from a
    *          config file. The parameters that are not overridden in code will
    *          be derived from the Configuration object.
-   * @return {@link ShuffleVertexManagerConfigurer}
+   * @return {@link org.apache.tez.dag.library.vertexmanager.ShuffleVertexManager.ShuffleVertexManagerConfigBuilder}
    */
-  public static ShuffleVertexManagerConfigurer createConfigurer(@Nullable Configuration conf) {
-    return new ShuffleVertexManagerConfigurer(conf);
+  public static ShuffleVertexManagerConfigBuilder createConfigBuilder(@Nullable Configuration conf) {
+    return new ShuffleVertexManagerConfigBuilder(conf);
   }
 
   /**
    * Helper class to configure ShuffleVertexManager
    */
-  public static final class ShuffleVertexManagerConfigurer {
+  public static final class ShuffleVertexManagerConfigBuilder {
     private final Configuration conf;
 
-    private ShuffleVertexManagerConfigurer(@Nullable Configuration conf) {
+    private ShuffleVertexManagerConfigBuilder(@Nullable Configuration conf) {
       if (conf == null) {
         this.conf = new Configuration(false);
       } else {
@@ -628,28 +631,28 @@ public class ShuffleVertexManager extends VertexManagerPlugin {
       }
     }
 
-    public ShuffleVertexManagerConfigurer setAutoReduceParallelism(boolean enabled) {
+    public ShuffleVertexManagerConfigBuilder setAutoReduceParallelism(boolean enabled) {
       conf.setBoolean(ShuffleVertexManager.TEZ_SHUFFLE_VERTEX_MANAGER_ENABLE_AUTO_PARALLEL, enabled);
       return this;
     }
 
-    public ShuffleVertexManagerConfigurer setSlowStartMinSrcCompletionFraction(float minFraction) {
-      conf.setFloat(ShuffleVertexManager.TEZ_SHUFFLE_VERTEX_MANAGER_MAX_SRC_FRACTION, minFraction);
+    public ShuffleVertexManagerConfigBuilder setSlowStartMinSrcCompletionFraction(float minFraction) {
+      conf.setFloat(ShuffleVertexManager.TEZ_SHUFFLE_VERTEX_MANAGER_MIN_SRC_FRACTION, minFraction);
       return this;
     }
 
-    public ShuffleVertexManagerConfigurer setSlowStartMaxSrcCompletionFraction(float maxFraction) {
+    public ShuffleVertexManagerConfigBuilder setSlowStartMaxSrcCompletionFraction(float maxFraction) {
       conf.setFloat(ShuffleVertexManager.TEZ_SHUFFLE_VERTEX_MANAGER_MAX_SRC_FRACTION, maxFraction);
       return this;
     }
 
-    public ShuffleVertexManagerConfigurer setDesiredTaskInputSize(long desiredTaskInputSize) {
+    public ShuffleVertexManagerConfigBuilder setDesiredTaskInputSize(long desiredTaskInputSize) {
       conf.setLong(ShuffleVertexManager.TEZ_SHUFFLE_VERTEX_MANAGER_DESIRED_TASK_INPUT_SIZE,
           desiredTaskInputSize);
       return this;
     }
 
-    public ShuffleVertexManagerConfigurer setMinTaskParallelism(int minTaskParallelism) {
+    public ShuffleVertexManagerConfigBuilder setMinTaskParallelism(int minTaskParallelism) {
       conf.setInt(ShuffleVertexManager.TEZ_SHUFFLE_VERTEX_MANAGER_MIN_TASK_PARALLELISM,
           minTaskParallelism);
       return this;
@@ -657,7 +660,7 @@ public class ShuffleVertexManager extends VertexManagerPlugin {
 
     public VertexManagerPluginDescriptor build() {
       VertexManagerPluginDescriptor desc =
-          new VertexManagerPluginDescriptor(ShuffleVertexManager.class.getName());
+          VertexManagerPluginDescriptor.create(ShuffleVertexManager.class.getName());
 
       try {
         return desc.setUserPayload(TezUtils.createUserPayloadFromConf(this.conf));

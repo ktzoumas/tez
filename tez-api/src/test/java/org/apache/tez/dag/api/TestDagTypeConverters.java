@@ -20,6 +20,7 @@ package org.apache.tez.dag.api;
 
 import java.io.IOException;
 
+import java.nio.ByteBuffer;
 import org.apache.tez.common.TezCommonUtils;
 import org.apache.tez.dag.api.records.DAGProtos.TezEntityDescriptorProto;
 import org.junit.Assert;
@@ -29,15 +30,15 @@ public class TestDagTypeConverters {
 
   @Test
   public void testTezEntityDescriptorSerialization() throws IOException {
-    UserPayload payload = new UserPayload(new String("Foobar").getBytes(), 100);
+    UserPayload payload = UserPayload.create(ByteBuffer.wrap(new String("Foobar").getBytes()), 100);
     String historytext = "Bar123";
     EntityDescriptor entityDescriptor =
-        new InputDescriptor("inputClazz").setUserPayload(payload)
+        InputDescriptor.create("inputClazz").setUserPayload(payload)
         .setHistoryText(historytext);
     TezEntityDescriptorProto proto =
         DagTypeConverters.convertToDAGPlan(entityDescriptor);
     Assert.assertEquals(payload.getVersion(), proto.getVersion());
-    Assert.assertArrayEquals(payload.getPayload(), proto.getUserPayload().toByteArray());
+    Assert.assertArrayEquals(payload.deepCopyAsArray(), proto.getUserPayload().toByteArray());
     Assert.assertTrue(proto.hasHistoryText());
     Assert.assertNotEquals(historytext, proto.getHistoryText());
     Assert.assertEquals(historytext, new String(

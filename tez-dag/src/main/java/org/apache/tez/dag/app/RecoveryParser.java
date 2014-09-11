@@ -71,6 +71,8 @@ import org.apache.tez.dag.records.TezVertexID;
 import org.apache.tez.dag.recovery.records.RecoveryProtos;
 import org.apache.tez.dag.recovery.records.RecoveryProtos.SummaryEventProto;
 
+import com.google.common.annotations.VisibleForTesting;
+
 public class RecoveryParser {
 
   private static final Log LOG = LogFactory.getLog(RecoveryParser.class);
@@ -233,18 +235,18 @@ public class RecoveryParser {
 
 
 
-  private static void parseDAGRecoveryFile(FSDataInputStream inputStream)
+  public static List<HistoryEvent> parseDAGRecoveryFile(FSDataInputStream inputStream)
       throws IOException {
+    List<HistoryEvent> historyEvents = new ArrayList<HistoryEvent>();
     while (true) {
       HistoryEvent historyEvent = getNextEvent(inputStream);
       if (historyEvent == null) {
         LOG.info("Reached end of stream");
         break;
       }
-      LOG.info("Parsed event from recovery stream"
-          + ", eventType=" + historyEvent.getEventType()
-          + ", event=" + historyEvent);
+      historyEvents.add(historyEvent);
     }
+    return historyEvents;
   }
 
   public static void main(String argv[]) throws IOException {
@@ -262,7 +264,12 @@ public class RecoveryParser {
     parseSummaryFile(fs.open(new Path(summaryPath)));
     for (String dagPath : dagPaths) {
       LOG.info("Parsing DAG recovery file " + dagPath);
-      parseDAGRecoveryFile(fs.open(new Path(dagPath)));
+      List<HistoryEvent> historyEvents = parseDAGRecoveryFile(fs.open(new Path(dagPath)));
+      for (HistoryEvent historyEvent : historyEvents) {
+        LOG.info("Parsed event from recovery stream"
+            + ", eventType=" + historyEvent.getEventType()
+            + ", event=" + historyEvent);
+      }
     }
   }
 
@@ -307,7 +314,8 @@ public class RecoveryParser {
     return recoveryFS.create(dagRecoveryPath, true, recoveryBufferSize);
   }
 
-  private DAGSummaryData getLastCompletedOrInProgressDAG(
+  @VisibleForTesting
+  DAGSummaryData getLastCompletedOrInProgressDAG(
       Map<TezDAGID, DAGSummaryData> dagSummaryDataMap) {
     DAGSummaryData inProgressDAG = null;
     DAGSummaryData lastCompletedDAG = null;
@@ -320,7 +328,10 @@ public class RecoveryParser {
         }
         inProgressDAG = entry.getValue();
       } else {
-        lastCompletedDAG = entry.getValue();
+        if (lastCompletedDAG == null ||
+            lastCompletedDAG.dagId.getId() < entry.getValue().dagId.getId()) {
+          lastCompletedDAG = entry.getValue();
+        }
       }
     }
     if (inProgressDAG == null) {
@@ -388,7 +399,8 @@ public class RecoveryParser {
     return TezCommonUtils.getAttemptRecoveryPath(recoveryDataDir, foundPreviousAttempt);
   }
 
-  private static class DAGSummaryData {
+  @VisibleForTesting
+  static class DAGSummaryData {
 
     final TezDAGID dagId;
     String dagName;
@@ -546,6 +558,7 @@ public class RecoveryParser {
         + ", lastModTime=" + summaryFileStatus.getModificationTime());
 
     int dagCounter = 0;
+
     Map<TezDAGID, DAGSummaryData> dagSummaryDataMap =
         new HashMap<TezDAGID, DAGSummaryData>();
     while (true) {

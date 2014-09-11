@@ -17,20 +17,22 @@ package org.apache.tez.runtime.api.event;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import java.nio.ByteBuffer;
+
 import org.apache.tez.runtime.api.events.CompositeDataMovementEvent;
 import org.apache.tez.runtime.api.events.DataMovementEvent;
 import org.junit.Assert;
 import org.junit.Test;
 
 public class TestCompositeDataMovementEvent {
-  byte[] userPayload = "Dummy userPayLoad".getBytes();
+  ByteBuffer userPayload = ByteBuffer.wrap("Dummy userPayLoad".getBytes());
 
   @Test
   public void testGetCount(){
     int numPartitions = 2;
     int startIndex = 2;
     CompositeDataMovementEvent cdme1 =
-        new CompositeDataMovementEvent(startIndex, numPartitions, userPayload);
+        CompositeDataMovementEvent.create(startIndex, numPartitions, userPayload);
     Assert.assertEquals(numPartitions, cdme1.getCount());
     Assert.assertEquals(startIndex, cdme1.getSourceIndexStart());
   }
@@ -40,7 +42,7 @@ public class TestCompositeDataMovementEvent {
     int numOutputs = 0;
     int startIndex = 1;
     CompositeDataMovementEvent cdme2 =
-        new CompositeDataMovementEvent(startIndex, numOutputs, userPayload);
+        CompositeDataMovementEvent.create(startIndex, numOutputs, userPayload);
     for(DataMovementEvent dme: cdme2.getEvents()){
       numOutputs++;
     }

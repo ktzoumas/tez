@@ -18,6 +18,7 @@
 
 package org.apache.tez.dag.history.events;
 
+import java.nio.ByteBuffer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
@@ -30,7 +31,7 @@ import org.apache.tez.common.counters.TezCounters;
 import org.apache.tez.dag.api.EdgeManagerPluginDescriptor;
 import org.apache.tez.dag.api.UserPayload;
 import org.apache.tez.dag.api.VertexLocationHint;
-import org.apache.tez.dag.api.VertexLocationHint.TaskLocationHint;
+import org.apache.tez.dag.api.TaskLocationHint;
 import org.apache.tez.dag.api.oldrecords.TaskAttemptState;
 import org.apache.tez.dag.api.oldrecords.TaskState;
 import org.apache.tez.dag.api.records.DAGProtos.DAGPlan;
@@ -303,15 +304,16 @@ public class TestHistoryEventsProtoConversion {
     {
       Map<String,EdgeManagerPluginDescriptor> sourceEdgeManagers
           = new LinkedHashMap<String, EdgeManagerPluginDescriptor>();
-      sourceEdgeManagers.put("foo", new EdgeManagerPluginDescriptor("bar"));
-      sourceEdgeManagers.put("foo1", new EdgeManagerPluginDescriptor("bar1")
-          .setUserPayload(new UserPayload(new String("payload").getBytes(), 100)));
+      sourceEdgeManagers.put("foo", EdgeManagerPluginDescriptor.create("bar"));
+      sourceEdgeManagers.put("foo1", EdgeManagerPluginDescriptor.create("bar1")
+          .setUserPayload(
+              UserPayload.create(ByteBuffer.wrap(new String("payload").getBytes()), 100)));
       VertexParallelismUpdatedEvent event =
           new VertexParallelismUpdatedEvent(
               TezVertexID.getInstance(
                   TezDAGID.getInstance(ApplicationId.newInstance(0, 1), 1), 111),
-              100, new VertexLocationHint(Arrays.asList(new TaskLocationHint(
-                  new HashSet<String>(Arrays.asList("h1")),
+              100, VertexLocationHint.create(Arrays.asList(TaskLocationHint.createTaskLocationHint(
+              new HashSet<String>(Arrays.asList("h1")),
               new HashSet<String>(Arrays.asList("r1"))))),
               sourceEdgeManagers, null);
 
@@ -329,8 +331,9 @@ public class TestHistoryEventsProtoConversion {
           deserializedEvent.getSourceEdgeManagers().get("foo1").getClassName());
       Assert.assertEquals(event.getSourceEdgeManagers().get("foo1").getUserPayload().getVersion(),
           deserializedEvent.getSourceEdgeManagers().get("foo1").getUserPayload().getVersion());
-      Assert.assertArrayEquals(event.getSourceEdgeManagers().get("foo1").getUserPayload().getPayload(),
-          deserializedEvent.getSourceEdgeManagers().get("foo1").getUserPayload().getPayload());
+      Assert.assertArrayEquals(
+          event.getSourceEdgeManagers().get("foo1").getUserPayload().deepCopyAsArray(),
+          deserializedEvent.getSourceEdgeManagers().get("foo1").getUserPayload().deepCopyAsArray());
       Assert.assertEquals(event.getVertexLocationHint(),
           deserializedEvent.getVertexLocationHint());
       logEvents(event, deserializedEvent);
@@ -540,7 +543,7 @@ public class TestHistoryEventsProtoConversion {
       // Expected
     }
     List<TezEvent> events =
-        Arrays.asList(new TezEvent(new DataMovementEvent(1, null),
+        Arrays.asList(new TezEvent(DataMovementEvent.create(1, null),
             new EventMetaData(EventProducerConsumerType.SYSTEM, "foo", "bar", null)));
     event = new VertexDataMovementEventsGeneratedEvent(
             TezVertexID.getInstance(

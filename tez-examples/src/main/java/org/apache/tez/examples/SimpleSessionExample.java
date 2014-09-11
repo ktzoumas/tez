@@ -57,7 +57,7 @@ public class SimpleSessionExample extends Configured implements Tool {
     // session mode then it can do so in code directly using the appropriate constructor
     
     // tezConf.setBoolean(TezConfiguration.TEZ_AM_SESSION_MODE, true); // via config OR via code
-    TezClient tezClient = new TezClient("SimpleSessionExample", tezConf, true);
+    TezClient tezClient = TezClient.create("SimpleSessionExample", tezConf, true);
     tezClient.start();
     
     // Session pre-warming allows the user to hide initial startup, resource acquisition latency etc.
@@ -76,7 +76,7 @@ public class SimpleSessionExample extends Configured implements Tool {
       // specified using other API's. We know that the OrderedWordCount dag uses default files and 
       // resources. Otherwise we would have to specify matching parameters in the preWarm API too.
       tezConf.setInt(TezConfiguration.TEZ_AM_SESSION_MIN_HELD_CONTAINERS, numPartitions);
-      tezClient.preWarm(PreWarmVertex.createConfigurer(tezConf).create());
+      tezClient.preWarm(PreWarmVertex.createConfigBuilder(tezConf).build());
     }
 
     // the remaining code is the same as submitting any DAG.

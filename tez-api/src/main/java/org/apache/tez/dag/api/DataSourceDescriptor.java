@@ -26,7 +26,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.yarn.api.records.LocalResource;
-import org.apache.tez.dag.api.VertexLocationHint.TaskLocationHint;
+import org.apache.tez.dag.api.TaskLocationHint;
 import org.apache.tez.runtime.api.InputInitializer;
 import org.apache.tez.runtime.api.events.InputDataInformationEvent;
 
@@ -42,10 +42,30 @@ public class DataSourceDescriptor {
   private final Credentials credentials;
   private final int numShards;
   private final VertexLocationHint locationHint;
-  private final Map<String, LocalResource> additionalLocalResources;
+  private final Map<String, LocalResource> additionalLocalFiles;
+
+  private DataSourceDescriptor(InputDescriptor inputDescriptor,
+                               @Nullable InputInitializerDescriptor initializerDescriptor,
+                               @Nullable Credentials credentials) {
+    this(inputDescriptor, initializerDescriptor, -1, credentials, null, null);
+  }
+
+  private DataSourceDescriptor(InputDescriptor inputDescriptor,
+                               @Nullable InputInitializerDescriptor initializerDescriptor,
+                               int numShards,
+                               @Nullable Credentials credentials,
+                               @Nullable VertexLocationHint locationHint,
+                               @Nullable Map<String, LocalResource> additionalLocalFiles) {
+    this.inputDescriptor = inputDescriptor;
+    this.initializerDescriptor = initializerDescriptor;
+    this.numShards = numShards;
+    this.credentials = credentials;
+    this.locationHint = locationHint;
+    this.additionalLocalFiles = additionalLocalFiles;
+  }
 
   /**
-   * Create a {@link DataSourceDescriptor} when the data shard calculation 
+   * Create a {@link DataSourceDescriptor} when the data shard calculation
    * happens in the App Master at runtime
    * @param inputDescriptor
    *          An {@link InputDescriptor} for the Input
@@ -60,10 +80,10 @@ public class DataSourceDescriptor {
    *          meant to determine the parallelism of the vertex, the initial
    *          vertex parallelism should be set to -1. Can be null.
    */
-  public DataSourceDescriptor(InputDescriptor inputDescriptor,
-      @Nullable InputInitializerDescriptor initializerDescriptor, 
-      @Nullable Credentials credentials) {
-    this(inputDescriptor, initializerDescriptor, -1, credentials, null, null);
+  public static DataSourceDescriptor create(InputDescriptor inputDescriptor,
+                                            @Nullable InputInitializerDescriptor initializerDescriptor,
+                                            @Nullable Credentials credentials) {
+    return new DataSourceDescriptor(inputDescriptor, initializerDescriptor, credentials);
   }
 
   /**
@@ -84,21 +104,19 @@ public class DataSourceDescriptor {
    * @param numShards                Number of shards of data
    * @param credentials              Credentials needed to access the data
    * @param locationHint             Location hints for the vertex tasks
-   * @param additionalLocalResources additional local resources required by this Input. An attempt
-   *                                 will be made to add these resources to the Vertex as Private
+   * @param additionalLocalFiles additional local files required by this Input. An attempt
+   *                                 will be made to add these files to the Vertex as Private
    *                                 resources. If a name conflict occurs, a {@link
-   *                                 org.apache.tez.dag.api.TezException} will be thrown
+   *                                 org.apache.tez.dag.api.TezUncheckedException} will be thrown
    */
-  public DataSourceDescriptor(InputDescriptor inputDescriptor,
-      @Nullable InputInitializerDescriptor initializerDescriptor, int numShards,
-      @Nullable Credentials credentials, @Nullable VertexLocationHint locationHint,
-      @Nullable Map<String, LocalResource> additionalLocalResources) {
-    this.inputDescriptor = inputDescriptor;
-    this.initializerDescriptor = initializerDescriptor;
-    this.numShards = numShards;
-    this.credentials = credentials;
-    this.locationHint = locationHint;
-    this.additionalLocalResources = additionalLocalResources;
+  public static DataSourceDescriptor create(InputDescriptor inputDescriptor,
+                                            @Nullable InputInitializerDescriptor initializerDescriptor,
+                                            int numShards,
+                                            @Nullable Credentials credentials,
+                                            @Nullable VertexLocationHint locationHint,
+                                            @Nullable Map<String, LocalResource> additionalLocalFiles) {
+    return new DataSourceDescriptor(inputDescriptor, initializerDescriptor, numShards, credentials,
+        locationHint, additionalLocalFiles);
   }
 
   public InputDescriptor getInputDescriptor() {
@@ -142,12 +160,12 @@ public class DataSourceDescriptor {
   }
 
   /**
-   * Get the list of additional local resources which were specified during creation.
-   * @return
+   * Get the list of additional local files which were specified during creation.
+   * @return  Map of additional local files or null if there are none
    */
   @InterfaceAudience.Private
-  public @Nullable Map<String, LocalResource> getAdditionalLocalResources() {
-    return additionalLocalResources;
+  public @Nullable Map<String, LocalResource> getAdditionalLocalFiles() {
+    return additionalLocalFiles;
   }
 
 

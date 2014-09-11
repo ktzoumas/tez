@@ -37,11 +37,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.util.StringUtils;
 import org.apache.tez.common.ReflectionUtils;
 import org.apache.tez.dag.api.InputDescriptor;
 import org.apache.tez.dag.api.OutputDescriptor;
@@ -479,7 +479,9 @@ public class LogicalIOProcessorRuntimeTask extends RuntimeTask {
     InputContext inputContext = new TezInputContextImpl(tezConf, localDirs,
         appAttemptNumber, tezUmbilical,
         taskSpec.getDAGName(), taskSpec.getVertexName(),
-        inputSpec.getSourceVertexName(), taskSpec.getTaskAttemptID(),
+        inputSpec.getSourceVertexName(),
+        taskSpec.getVertexParallelism(),
+        taskSpec.getTaskAttemptID(),
         tezCounters, inputIndex,
         inputSpec.getInputDescriptor().getUserPayload(), this,
         serviceConsumerMetadata, System.getenv(), initialMemoryDistributor,
@@ -491,7 +493,9 @@ public class LogicalIOProcessorRuntimeTask extends RuntimeTask {
     OutputContext outputContext = new TezOutputContextImpl(tezConf, localDirs,
         appAttemptNumber, tezUmbilical,
         taskSpec.getDAGName(), taskSpec.getVertexName(),
-        outputSpec.getDestinationVertexName(), taskSpec.getTaskAttemptID(),
+        outputSpec.getDestinationVertexName(),
+        taskSpec.getVertexParallelism(),
+        taskSpec.getTaskAttemptID(),
         tezCounters, outputIndex,
         outputSpec.getOutputDescriptor().getUserPayload(), this,
         serviceConsumerMetadata, System.getenv(), initialMemoryDistributor,
@@ -503,6 +507,7 @@ public class LogicalIOProcessorRuntimeTask extends RuntimeTask {
     ProcessorContext processorContext = new TezProcessorContextImpl(tezConf, localDirs,
         appAttemptNumber, tezUmbilical,
         taskSpec.getDAGName(), taskSpec.getVertexName(),
+        taskSpec.getVertexParallelism(),
         taskSpec.getTaskAttemptID(),
         tezCounters, processorDescriptor.getUserPayload(), this,
         serviceConsumerMetadata, System.getenv(), initialMemoryDistributor,
@@ -634,7 +639,7 @@ public class LogicalIOProcessorRuntimeTask extends RuntimeTask {
           getTaskAttemptID());
       setFrameworkCounters();
       tezUmbilical.signalFatalError(getTaskAttemptID(),
-          t, StringUtils.stringifyException(t), sourceInfo);
+          t, ExceptionUtils.getStackTrace(t), sourceInfo);
       return false;
     }
     return true;

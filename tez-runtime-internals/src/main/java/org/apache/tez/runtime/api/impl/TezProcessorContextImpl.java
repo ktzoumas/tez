@@ -53,16 +53,16 @@ public class TezProcessorContextImpl extends TezTaskContextImpl implements Proce
 
   public TezProcessorContextImpl(Configuration conf, String[] workDirs, int appAttemptNumber,
       TezUmbilical tezUmbilical, String dagName, String vertexName,
-      TezTaskAttemptID taskAttemptID, TezCounters counters,
+      int vertexParallelism, TezTaskAttemptID taskAttemptID, TezCounters counters,
       @Nullable UserPayload userPayload, RuntimeTask runtimeTask,
       Map<String, ByteBuffer> serviceConsumerMetadata,
       Map<String, String> auxServiceEnv, MemoryDistributor memDist,
       ProcessorDescriptor processorDescriptor, InputReadyTracker inputReadyTracker, ObjectRegistry objectRegistry) {
-    super(conf, workDirs, appAttemptNumber, dagName, vertexName, taskAttemptID,
+    super(conf, workDirs, appAttemptNumber, dagName, vertexName, vertexParallelism, taskAttemptID,
         counters, runtimeTask, tezUmbilical, serviceConsumerMetadata,
         auxServiceEnv, memDist, processorDescriptor, objectRegistry);
     checkNotNull(inputReadyTracker, "inputReadyTracker is null");
-    this.userPayload = userPayload == null ? new UserPayload(null) : userPayload;
+    this.userPayload = userPayload == null ? UserPayload.create(null) : userPayload;
     this.sourceInfo = new EventMetaData(EventProducerConsumerType.PROCESSOR,
         taskVertexName, "", taskAttemptID);
     this.inputReadyTracker = inputReadyTracker;

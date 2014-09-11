@@ -29,6 +29,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
+import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.tez.common.TezUtils;
@@ -58,6 +59,7 @@ import com.google.protobuf.ByteString;
  * value data without applying any ordering or grouping constraints. This can be
  * used to write raw key value data as is.
  */
+@Public
 public class UnorderedKVOutput extends AbstractLogicalOutput {
 
   private static final Log LOG = LogFactory.getLog(UnorderedKVOutput.class);
@@ -84,11 +86,11 @@ public class UnorderedKVOutput extends AbstractLogicalOutput {
     getContext().requestInitialMemory(0l, null); // mandatory call
 
     this.dataViaEventsEnabled = conf.getBoolean(
-        TezRuntimeConfiguration.TEZ_RUNTIME_BROADCAST_DATA_VIA_EVENTS_ENABLED,
-        TezRuntimeConfiguration.TEZ_RUNTIME_BROADCAST_DATA_VIA_EVENTS_ENABLED_DEFAULT);
+        TezRuntimeConfiguration.TEZ_RUNTIME_TRANSFER_DATA_VIA_EVENTS_ENABLED,
+        TezRuntimeConfiguration.TEZ_RUNTIME_TRANSFER_DATA_VIA_EVENTS_ENABLED_DEFAULT);
     this.dataViaEventsMaxSize = conf.getInt(
-        TezRuntimeConfiguration.TEZ_RUNTIME_BROADCAST_DATA_VIA_EVENTS_MAX_SIZE,
-        TezRuntimeConfiguration.TEZ_RUNTIME_BROADCAST_DATA_VIA_EVENTS_MAX_SIZE_DEFAULT);
+        TezRuntimeConfiguration.TEZ_RUNTIME_TRANSFER_DATA_VIA_EVENTS_MAX_SIZE,
+        TezRuntimeConfiguration.TEZ_RUNTIME_TRANSFER_DATA_VIA_EVENTS_MAX_SIZE_DEFAULT);
     
     LOG.info(this.getClass().getSimpleName() + " running with params -> "
         + "dataViaEventsEnabled: " + dataViaEventsEnabled
@@ -154,7 +156,7 @@ public class UnorderedKVOutput extends AbstractLogicalOutput {
     }
     DataMovementEventPayloadProto payloadProto = payloadBuilder.build();
 
-    DataMovementEvent dmEvent = new DataMovementEvent(0, payloadProto.toByteArray());
+    DataMovementEvent dmEvent = DataMovementEvent.create(0, payloadProto.toByteString().asReadOnlyByteBuffer());
     List<Event> events = Lists.newArrayListWithCapacity(1);
     events.add(dmEvent);
     return events;

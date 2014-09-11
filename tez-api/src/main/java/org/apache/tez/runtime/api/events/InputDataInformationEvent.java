@@ -18,6 +18,8 @@
 
 package org.apache.tez.runtime.api.events;
 
+import java.nio.ByteBuffer;
+
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.tez.dag.api.VertexManagerPlugin;
@@ -43,26 +45,38 @@ import org.apache.tez.runtime.api.InputInitializer;
 @Public
 public final class InputDataInformationEvent extends Event {
 
+
   private final int sourceIndex;
   private int targetIndex; // TODO Likely to be multiple at a later point.
-  private final byte[] userPayload;
+  private final ByteBuffer userPayload;
   private final Object userPayloadObject;
   
-  /**
-   * Provide a serialized form of the payload
-   * @param srcIndex the src index
-   * @param userPayload the serialized payload
-   */
-  public InputDataInformationEvent(int srcIndex, byte[] userPayload) {
+
+  private InputDataInformationEvent(int srcIndex, ByteBuffer userPayload) {
     this.sourceIndex = srcIndex;
     this.userPayload = userPayload;
     this.userPayloadObject = null;
   }
   
-  public InputDataInformationEvent(int srcIndex, Object userPayloadDeserialized) {
+  private InputDataInformationEvent(int srcIndex, Object userPayloadDeserialized, Object sigChanged) {
     this.sourceIndex = srcIndex;
     this.userPayloadObject = userPayloadDeserialized;
     this.userPayload = null;
+  }
+
+  /**
+   * Provide a serialized form of the payload
+   * @param srcIndex the src index
+   * @param userPayload the serialized payload
+   */
+  public static InputDataInformationEvent createWithSerializedPayload(int srcIndex,
+                                                                      ByteBuffer userPayload) {
+    return new InputDataInformationEvent(srcIndex, userPayload);
+  }
+
+  public static InputDataInformationEvent createWithObjectPayload(int srcIndex,
+                                                                  Object userPayloadDeserialized) {
+    return new InputDataInformationEvent(srcIndex, userPayloadDeserialized, null);
   }
 
   public int getSourceIndex() {
@@ -77,8 +91,8 @@ public final class InputDataInformationEvent extends Event {
     this.targetIndex = target;
   }
   
-  public byte[] getUserPayload() {
-    return userPayload;
+  public ByteBuffer getUserPayload() {
+    return userPayload == null ? null : userPayload.asReadOnlyBuffer();
   }
   
   public Object getDeserializedUserPayload() {

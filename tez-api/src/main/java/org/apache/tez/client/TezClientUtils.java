@@ -75,11 +75,9 @@ import org.apache.hadoop.yarn.security.client.ClientToAMTokenIdentifier;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.Records;
 import org.apache.log4j.Level;
-import org.apache.tez.common.LogUtils;
 import org.apache.tez.common.TezCommonUtils;
 import org.apache.tez.common.TezYARNUtils;
 import org.apache.tez.common.security.ACLManager;
-import org.apache.tez.common.security.Groups;
 import org.apache.tez.common.security.JobTokenIdentifier;
 import org.apache.tez.common.security.JobTokenSecretManager;
 import org.apache.tez.common.security.TokenCache;
@@ -168,7 +166,7 @@ public class TezClientUtils {
       if (tezJarUris == null || tezJarUris.length == 0) {
         throw new TezUncheckedException("Invalid configuration of tez jars"
             + ", " + TezConfiguration.TEZ_LIB_URIS
-            + " is not defined in the configurartion");
+            + " is not defined in the configuration");
       }
      
       List<Path> tezJarPaths = Lists.newArrayListWithCapacity(tezJarUris.length);
@@ -336,7 +334,7 @@ public class TezClientUtils {
       Configuration conf) throws IOException {
 
     Preconditions.checkNotNull(sessionCredentials);
-    LogUtils.logCredentials(LOG, sessionCredentials, "session");
+    TezCommonUtils.logCredentials(LOG, sessionCredentials, "session");
 
     Credentials dagCredentials = dag.getCredentials();
     if (dagCredentials == null) {
@@ -377,7 +375,6 @@ public class TezClientUtils {
 
   /**
    * Create an ApplicationSubmissionContext to launch a Tez AM
-   * @param conf TezConfiguration
    * @param appId Application Id
    * @param dag DAG to be submitted
    * @param amName Name for the application
@@ -389,13 +386,13 @@ public class TezClientUtils {
    * @throws YarnException
    */
   static ApplicationSubmissionContext createApplicationSubmissionContext(
-      TezConfiguration conf, ApplicationId appId, DAG dag, String amName,
+      ApplicationId appId, DAG dag, String amName,
       AMConfiguration amConfig, Map<String, LocalResource> tezJarResources,
       Credentials sessionCreds)
           throws IOException, YarnException{
 
     Preconditions.checkNotNull(sessionCreds);
-
+    TezConfiguration conf = amConfig.getTezConfiguration();
     boolean tezLrsAsArchive = usingTezLibsFromArchive(tezJarResources);
 
     FileSystem fs = TezClientUtils.ensureStagingDirExists(conf,
@@ -435,12 +432,6 @@ public class TezClientUtils {
     DataOutputBuffer dob = new DataOutputBuffer();
     amLaunchCredentials.writeTokenStorageToStream(dob);
     securityTokens = ByteBuffer.wrap(dob.getData(), 0, dob.getLength());
-
-    // Need to set credentials based on DAG and the URIs which have been set for the DAG.
-
-    if (dag != null) {
-      setupDAGCredentials(dag, sessionCreds, conf);
-    }
 
     // Setup the command to run the AM
     List<String> vargs = new ArrayList<String>(8);
@@ -499,34 +490,22 @@ public class TezClientUtils {
       }
     }
     
-    Map<String, LocalResource> localResources =
+    Map<String, LocalResource> amLocalResources =
         new TreeMap<String, LocalResource>();
 
     // Not fetching credentials for AMLocalResources. Expect this to be provided via AMCredentials.
-    if (amConfig.getLocalResources() != null) {
-      localResources.putAll(amConfig.getLocalResources());
+    if (amConfig.getAMLocalResources() != null) {
+      amLocalResources.putAll(amConfig.getAMLocalResources());
     }
-    localResources.putAll(tezJarResources);
+    amLocalResources.putAll(tezJarResources);
 
     // emit conf as PB file
-    Configuration finalTezConf = createFinalTezConfForApp(conf,
-      amConfig.getTezConfiguration());
+    ConfigurationProto finalConfProto = createFinalConfProtoForApp(amConfig.getTezConfiguration());
     
     FSDataOutputStream amConfPBOutBinaryStream = null;
     try {
-      ConfigurationProto.Builder confProtoBuilder =
-          ConfigurationProto.newBuilder();
-      Iterator<Entry<String, String>> iter = finalTezConf.iterator();
-      while (iter.hasNext()) {
-        Entry<String, String> entry = iter.next();
-        PlanKeyValuePair.Builder kvp = PlanKeyValuePair.newBuilder();
-        kvp.setKey(entry.getKey());
-        kvp.setValue(entry.getValue());
-        confProtoBuilder.addConfKeyValues(kvp);
-      }
-      //binary output
       amConfPBOutBinaryStream = TezCommonUtils.createFileForAM(fs, binaryConfPath);
-      confProtoBuilder.build().writeTo(amConfPBOutBinaryStream);
+      finalConfProto.writeTo(amConfPBOutBinaryStream);
     } finally {
       if(amConfPBOutBinaryStream != null){
         amConfPBOutBinaryStream.close();
@@ -537,27 +516,19 @@ public class TezClientUtils {
         TezClientUtils.createLocalResource(fs,
             binaryConfPath, LocalResourceType.FILE,
             LocalResourceVisibility.APPLICATION);
-    localResources.put(TezConstants.TEZ_PB_BINARY_CONF_NAME,
+    amConfig.setBinaryConfLR(binaryConfLRsrc);
+    amLocalResources.put(TezConstants.TEZ_PB_BINARY_CONF_NAME,
         binaryConfLRsrc);
 
     // Create Session Jars definition to be sent to AM as a local resource
-    Path sessionJarsPath = TezCommonUtils.getTezSessionJarStagingPath(tezSysStagingPath);
+    Path sessionJarsPath = TezCommonUtils.getTezAMJarStagingPath(tezSysStagingPath);
     FSDataOutputStream sessionJarsPBOutStream = null;
     try {
-      Map<String, LocalResource> sessionJars =
-        new HashMap<String, LocalResource>(tezJarResources.size() + 1);
-      sessionJars.putAll(tezJarResources);
-      sessionJars.put(TezConstants.TEZ_PB_BINARY_CONF_NAME,
-        binaryConfLRsrc);
-      DAGProtos.PlanLocalResourcesProto proto =
-        DagTypeConverters.convertFromLocalResources(sessionJars);
       sessionJarsPBOutStream = TezCommonUtils.createFileForAM(fs, sessionJarsPath);
-      proto.writeDelimitedTo(sessionJarsPBOutStream);
-      
       // Write out the initial list of resources which will be available in the AM
       DAGProtos.PlanLocalResourcesProto amResourceProto;
-      if (amConfig.getLocalResources() != null && !amConfig.getLocalResources().isEmpty()) {
-        amResourceProto = DagTypeConverters.convertFromLocalResources(localResources);
+      if (amLocalResources != null && !amLocalResources.isEmpty()) {
+        amResourceProto = DagTypeConverters.convertFromLocalResources(amLocalResources);
       } else {
         amResourceProto = DAGProtos.PlanLocalResourcesProto.getDefaultInstance(); 
       }
@@ -572,32 +543,17 @@ public class TezClientUtils {
       TezClientUtils.createLocalResource(fs,
         sessionJarsPath, LocalResourceType.FILE,
         LocalResourceVisibility.APPLICATION);
-    localResources.put(
-      TezConstants.TEZ_SESSION_LOCAL_RESOURCES_PB_FILE_NAME,
+    amLocalResources.put(
+      TezConstants.TEZ_AM_LOCAL_RESOURCES_PB_FILE_NAME,
       sessionJarsPBLRsrc);
 
     String user = UserGroupInformation.getCurrentUser().getShortUserName();
-
-    Groups groups = null;
-    ACLManager aclManager = new ACLManager(groups, user, finalTezConf);
+    ACLManager aclManager = new ACLManager(user, amConfig.getTezConfiguration());
     Map<ApplicationAccessType, String> acls = aclManager.toYARNACls();
 
     if(dag != null) {
-
-      for (Vertex v : dag.getVertices()) {
-        if (tezJarResources != null) {
-          v.getTaskLocalFiles().putAll(tezJarResources);
-        }
-        v.getTaskLocalFiles().put(TezConstants.TEZ_PB_BINARY_CONF_NAME,
-            binaryConfLRsrc);
-
-        Map<String, String> taskEnv = v.getTaskEnvironment();
-        TezYARNUtils.setupDefaultEnv(taskEnv, conf,
-            TezConfiguration.TEZ_TASK_LAUNCH_ENV,
-            TezConfiguration.TEZ_TASK_LAUNCH_ENV_DEFAULT, tezLrsAsArchive);
-
-        TezClientUtils.setDefaultLaunchCmdOpts(v, amConfig.getTezConfiguration());
-      }
+      
+      updateDAGVertices(dag, amConfig, tezJarResources, tezLrsAsArchive, sessionCreds);
 
       // emit protobuf DAG file style
       Path binaryPath = TezCommonUtils.getTezBinPlanStagingPath(tezSysStagingPath);
@@ -606,8 +562,6 @@ public class TezClientUtils {
             + tezSysStagingPath + " binaryConfPath :" + binaryConfPath + " sessionJarsPath :"
             + sessionJarsPath + " binaryPlanPath :" + binaryPath);
       }
-      amConfig.getTezConfiguration().set(TezConstants.TEZ_AM_PLAN_REMOTE_PATH,
-          binaryPath.toUri().toString());
 
       DAGPlan dagPB = dag.createDag(amConfig.getTezConfiguration());
 
@@ -623,14 +577,14 @@ public class TezClientUtils {
         }
       }
 
-      localResources.put(TezConstants.TEZ_PB_PLAN_BINARY_NAME,
+      amLocalResources.put(TezConstants.TEZ_PB_PLAN_BINARY_NAME,
         TezClientUtils.createLocalResource(fs,
           binaryPath, LocalResourceType.FILE,
           LocalResourceVisibility.APPLICATION));
 
       if (Level.DEBUG.isGreaterOrEqual(Level.toLevel(amLogLevel))) {
         Path textPath = localizeDagPlanAsText(dagPB, fs, amConfig, strAppId, tezSysStagingPath);
-        localResources.put(TezConstants.TEZ_PB_PLAN_TEXT_NAME,
+        amLocalResources.put(TezConstants.TEZ_PB_PLAN_TEXT_NAME,
             TezClientUtils.createLocalResource(fs,
                 textPath, LocalResourceType.FILE,
                 LocalResourceVisibility.APPLICATION));
@@ -639,7 +593,7 @@ public class TezClientUtils {
 
     // Setup ContainerLaunchContext for AM container
     ContainerLaunchContext amContainer =
-        ContainerLaunchContext.newInstance(localResources, environment,
+        ContainerLaunchContext.newInstance(amLocalResources, environment,
             vargsFinal, null, securityTokens, acls);
 
     // Set up the ApplicationSubmissionContext
@@ -659,13 +613,32 @@ public class TezClientUtils {
     appContext.setAMContainerSpec(amContainer);
 
     appContext.setMaxAppAttempts(
-      finalTezConf.getInt(TezConfiguration.TEZ_AM_MAX_APP_ATTEMPTS,
+      amConfig.getTezConfiguration().getInt(TezConfiguration.TEZ_AM_MAX_APP_ATTEMPTS,
         TezConfiguration.TEZ_AM_MAX_APP_ATTEMPTS_DEFAULT));
 
     return appContext;
 
   }
   
+  static void updateDAGVertices(DAG dag, AMConfiguration amConfig,
+      Map<String, LocalResource> tezJarResources, boolean tezLrsAsArchive,
+      Credentials credentials) throws IOException {
+    setupDAGCredentials(dag, credentials, amConfig.getTezConfiguration());
+    for (Vertex v : dag.getVertices()) {
+      if (tezJarResources != null) {
+        v.getTaskLocalFiles().putAll(tezJarResources);
+      }
+      v.getTaskLocalFiles().put(TezConstants.TEZ_PB_BINARY_CONF_NAME,
+          amConfig.getBinaryConfLR());
+
+      Map<String, String> taskEnv = v.getTaskEnvironment();
+      TezYARNUtils.setupDefaultEnv(taskEnv, amConfig.getTezConfiguration(),
+          TezConfiguration.TEZ_TASK_LAUNCH_ENV,
+          TezConfiguration.TEZ_TASK_LAUNCH_ENV_DEFAULT, tezLrsAsArchive);
+
+      setDefaultLaunchCmdOpts(v, amConfig.getTezConfiguration());
+    }
+  }
   
   static void maybeAddDefaultLoggingJavaOpts(String logLevel, List<String> vargs) {
     if (vargs != null && !vargs.isEmpty()) {
@@ -718,41 +691,16 @@ public class TezClientUtils {
         + "," + TezConstants.TEZ_CONTAINER_LOGGER_NAME);
   }
 
-  static Configuration createFinalTezConfForApp(TezConfiguration tezConf,
-      TezConfiguration amConf) {
-    Configuration conf = new Configuration(false);
-    conf.setQuietMode(true);
-
-    assert tezConf != null;
+  static ConfigurationProto createFinalConfProtoForApp(Configuration amConf) {
     assert amConf != null;
-
-    Entry<String, String> entry;
-    Iterator<Entry<String, String>> iter = tezConf.iterator();
-    while (iter.hasNext()) {
-      entry = iter.next();
-      // Copy all tez config parameters.
-      if (entry.getKey().startsWith(TezConfiguration.TEZ_PREFIX)) {
-        conf.set(entry.getKey(), entry.getValue());
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Adding tez dag am parameter from conf: " + entry.getKey()
-            + ", with value: " + entry.getValue());
-        }
-      }
+    ConfigurationProto.Builder builder = ConfigurationProto.newBuilder();
+    for (Entry<String, String> entry : amConf) {
+      PlanKeyValuePair.Builder kvp = PlanKeyValuePair.newBuilder();
+      kvp.setKey(entry.getKey());
+      kvp.setValue(entry.getValue());
+      builder.addConfKeyValues(kvp);
     }
-
-    iter = amConf.iterator();
-    while (iter.hasNext()) {
-      entry = iter.next();
-      // Copy all tez config parameters.
-      if (entry.getKey().startsWith(TezConfiguration.TEZ_PREFIX)) {
-        conf.set(entry.getKey(), entry.getValue());
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Adding tez dag am parameter from amConf: " + entry.getKey()
-              + ", with value: " + entry.getValue());
-        }
-      }
-    }
-    return conf;
+    return builder.build();
   }
 
   /**

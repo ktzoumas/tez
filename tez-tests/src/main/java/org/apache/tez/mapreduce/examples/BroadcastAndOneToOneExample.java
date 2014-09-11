@@ -20,6 +20,7 @@ package org.apache.tez.mapreduce.examples;
 
 import java.io.IOException;
 
+import java.nio.ByteBuffer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
@@ -49,7 +50,7 @@ import org.apache.tez.runtime.api.ObjectRegistry;
 import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
-import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfig;
 import org.apache.tez.runtime.library.output.UnorderedKVOutput;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
 
@@ -70,9 +71,9 @@ public class BroadcastAndOneToOneExample extends Configured implements Tool {
           .next();
       KeyValueWriter kvWriter = (KeyValueWriter) output.getWriter();
       kvWriter.write(word, new IntWritable(getContext().getTaskIndex()));
-      byte[] userPayload = getContext().getUserPayload().getPayload();
+      ByteBuffer userPayload = getContext().getUserPayload().getPayload();
       if (userPayload != null) {
-        boolean doLocalityCheck = userPayload[0] > 0 ? true : false;
+        boolean doLocalityCheck = getContext().getUserPayload().getPayload().get(0) > 0 ? true : false;
         if (doLocalityCheck) {
           ObjectRegistry objectRegistry = getContext().getObjectRegistry();
           String entry = String.valueOf(getContext().getTaskIndex());
@@ -102,8 +103,8 @@ public class BroadcastAndOneToOneExample extends Configured implements Tool {
       while (inputKvReader.next()) {
         sum += ((IntWritable) inputKvReader.getCurrentValue()).get();
       }
-      boolean doLocalityCheck = getContext().getUserPayload().getPayload()[0] > 0 ? true : false;
-      int broadcastSum = getContext().getUserPayload().getPayload()[1];
+      boolean doLocalityCheck = getContext().getUserPayload().getPayload().get(0) > 0 ? true : false;
+      int broadcastSum = getContext().getUserPayload().getPayload().get(1);
       int expectedSum = broadcastSum + getContext().getTaskIndex();
       System.out.println("Index: " + getContext().getTaskIndex() + 
           " sum: " + sum + " expectedSum: " + expectedSum + " broadcastSum: " + broadcastSum);
@@ -141,33 +142,33 @@ public class BroadcastAndOneToOneExample extends Configured implements Tool {
       }
     }
     byte[] procByte = {(byte) (doLocalityCheck ? 1 : 0), 1};
-    UserPayload procPayload = new UserPayload(procByte);
+    UserPayload procPayload = UserPayload.create(ByteBuffer.wrap(procByte));
 
     System.out.println("Using " + numOneToOneTasks + " 1-1 tasks");
 
-    Vertex broadcastVertex = new Vertex("Broadcast", new ProcessorDescriptor(
+    Vertex broadcastVertex = Vertex.create("Broadcast", ProcessorDescriptor.create(
         InputProcessor.class.getName()), numBroadcastTasks);
     
-    Vertex inputVertex = new Vertex("Input", new ProcessorDescriptor(
+    Vertex inputVertex = Vertex.create("Input", ProcessorDescriptor.create(
         InputProcessor.class.getName()).setUserPayload(procPayload), numOneToOneTasks);
 
-    Vertex oneToOneVertex = new Vertex("OneToOne",
-        new ProcessorDescriptor(
+    Vertex oneToOneVertex = Vertex.create("OneToOne",
+        ProcessorDescriptor.create(
             OneToOneProcessor.class.getName()).setUserPayload(procPayload));
     oneToOneVertex.setVertexManagerPlugin(
-            new VertexManagerPluginDescriptor(InputReadyVertexManager.class.getName()));
+        VertexManagerPluginDescriptor.create(InputReadyVertexManager.class.getName()));
 
-    UnorderedKVEdgeConfigurer edgeConf = UnorderedKVEdgeConfigurer
+    UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
         .newBuilder(Text.class.getName(), IntWritable.class.getName()).build();
 
-    DAG dag = new DAG("BroadcastAndOneToOneExample");
+    DAG dag = DAG.create("BroadcastAndOneToOneExample");
     dag.addVertex(inputVertex)
         .addVertex(broadcastVertex)
         .addVertex(oneToOneVertex)
         .addEdge(
-            new Edge(inputVertex, oneToOneVertex, edgeConf.createDefaultOneToOneEdgeProperty()))
+            Edge.create(inputVertex, oneToOneVertex, edgeConf.createDefaultOneToOneEdgeProperty()))
         .addEdge(
-            new Edge(broadcastVertex, oneToOneVertex,
+            Edge.create(broadcastVertex, oneToOneVertex,
                 edgeConf.createDefaultBroadcastEdgeProperty()));
     return dag;
   }
@@ -201,7 +202,7 @@ public class BroadcastAndOneToOneExample extends Configured implements Tool {
     // is the same filesystem as the one used for Input/Output.
     TezClient tezSession = null;
     // needs session or else TaskScheduler does not hold onto containers
-    tezSession = new TezClient("broadcastAndOneToOneExample", tezConf);
+    tezSession = TezClient.create("broadcastAndOneToOneExample", tezConf);
     tezSession.start();
 
     DAGClient dagClient = null;

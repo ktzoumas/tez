@@ -42,7 +42,7 @@ public class TestOutput extends AbstractLogicalOutput {
   }
 
   public static OutputDescriptor getOutputDesc(UserPayload payload) {
-    OutputDescriptor desc = new OutputDescriptor(TestOutput.class.getName());
+    OutputDescriptor desc = OutputDescriptor.create(TestOutput.class.getName());
     if (payload != null) {
       desc.setUserPayload(payload);
     }
@@ -77,10 +77,11 @@ public class TestOutput extends AbstractLogicalOutput {
   @Override
   public List<Event> close() throws Exception {
     LOG.info("Sending data movement event with value: " + output);
-    byte[] result = ByteBuffer.allocate(4).putInt(output).array();
+    ByteBuffer result = ByteBuffer.allocate(4).putInt(output);
+    result.flip();
     List<Event> events = Lists.newArrayListWithCapacity(getNumPhysicalOutputs());
     for (int i = 0; i < getNumPhysicalOutputs(); i++) {
-      DataMovementEvent event = new DataMovementEvent(i, result);
+      DataMovementEvent event = DataMovementEvent.create(i, result);
       events.add(event);
     }
     return events;

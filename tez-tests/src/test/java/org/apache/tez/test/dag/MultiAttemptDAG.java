@@ -21,6 +21,7 @@ package org.apache.tez.test.dag;
 import com.google.common.collect.Lists;
 import com.google.common.primitives.Ints;
 
+import java.nio.ByteBuffer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -113,7 +114,7 @@ public class MultiAttemptDAG {
       if (numCompletions.get() >= numSourceTasks
           && !tasksScheduled) {
         tasksScheduled = true;
-        String payload = new String(getContext().getUserPayload().getPayload());
+        String payload = new String(getContext().getUserPayload().deepCopyAsArray());
         int successAttemptId = Integer.valueOf(payload);
         LOG.info("Checking whether to crash AM or schedule tasks"
             + ", successfulAttemptID=" + successAttemptId
@@ -164,7 +165,8 @@ public class MultiAttemptDAG {
     public void initialize() throws Exception {
       FailingOutputCommitterConfig config = new
           FailingOutputCommitterConfig();
-      config.fromUserPayload(getContext().getOutputUserPayload().getPayload());
+      config.fromUserPayload(
+          getContext().getOutputUserPayload().deepCopyAsArray());
       failOnCommit = config.failOnCommit;
     }
 
@@ -318,36 +320,36 @@ public class MultiAttemptDAG {
 
   public static DAG createDAG(String name,
       Configuration conf) throws Exception {
-    UserPayload payload = new UserPayload(null);
+    UserPayload payload = UserPayload.create(null);
     int taskCount = MULTI_ATTEMPT_DAG_VERTEX_NUM_TASKS_DEFAULT;
     if (conf != null) {
       taskCount = conf.getInt(MULTI_ATTEMPT_DAG_VERTEX_NUM_TASKS, MULTI_ATTEMPT_DAG_VERTEX_NUM_TASKS_DEFAULT);
       payload = TezUtils.createUserPayloadFromConf(conf);
     }
-    DAG dag = new DAG(name);
-    Vertex v1 = new Vertex("v1", TestProcessor.getProcDesc(payload), taskCount, defaultResource);
-    Vertex v2 = new Vertex("v2", TestProcessor.getProcDesc(payload), taskCount, defaultResource);
-    Vertex v3 = new Vertex("v3", TestProcessor.getProcDesc(payload), taskCount, defaultResource);
+    DAG dag = DAG.create(name);
+    Vertex v1 = Vertex.create("v1", TestProcessor.getProcDesc(payload), taskCount, defaultResource);
+    Vertex v2 = Vertex.create("v2", TestProcessor.getProcDesc(payload), taskCount, defaultResource);
+    Vertex v3 = Vertex.create("v3", TestProcessor.getProcDesc(payload), taskCount, defaultResource);
 
     // Make each vertex manager fail on appropriate attempt
-    v1.setVertexManagerPlugin(new VertexManagerPluginDescriptor(
+    v1.setVertexManagerPlugin(VertexManagerPluginDescriptor.create(
         FailOnAttemptVertexManagerPlugin.class.getName())
-        .setUserPayload(new UserPayload(new String("1").getBytes())));
-    v2.setVertexManagerPlugin(new VertexManagerPluginDescriptor(
+        .setUserPayload(UserPayload.create(ByteBuffer.wrap(new String("1").getBytes()))));
+    v2.setVertexManagerPlugin(VertexManagerPluginDescriptor.create(
         FailOnAttemptVertexManagerPlugin.class.getName())
-        .setUserPayload(new UserPayload(new String("2").getBytes())));
-    v3.setVertexManagerPlugin(new VertexManagerPluginDescriptor(
+        .setUserPayload(UserPayload.create(ByteBuffer.wrap(new String("2").getBytes()))));
+    v3.setVertexManagerPlugin(VertexManagerPluginDescriptor.create(
         FailOnAttemptVertexManagerPlugin.class.getName())
-        .setUserPayload(new UserPayload(new String("3").getBytes())));
+        .setUserPayload(UserPayload.create(ByteBuffer.wrap(new String("3").getBytes()))));
     dag.addVertex(v1).addVertex(v2).addVertex(v3);
-    dag.addEdge(new Edge(v1, v2,
-        new EdgeProperty(DataMovementType.SCATTER_GATHER,
+    dag.addEdge(Edge.create(v1, v2,
+        EdgeProperty.create(DataMovementType.SCATTER_GATHER,
             DataSourceType.PERSISTED,
             SchedulingType.SEQUENTIAL,
             TestOutput.getOutputDesc(payload),
             TestInput.getInputDesc(payload))));
-    dag.addEdge(new Edge(v2, v3,
-        new EdgeProperty(DataMovementType.SCATTER_GATHER,
+    dag.addEdge(Edge.create(v2, v3,
+        EdgeProperty.create(DataMovementType.SCATTER_GATHER,
             DataSourceType.PERSISTED,
             SchedulingType.SEQUENTIAL,
             TestOutput.getOutputDesc(payload),

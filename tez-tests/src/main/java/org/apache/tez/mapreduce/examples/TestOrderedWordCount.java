@@ -75,7 +75,7 @@ import org.apache.tez.mapreduce.output.MROutputLegacy;
 import org.apache.tez.mapreduce.processor.map.MapProcessor;
 import org.apache.tez.mapreduce.processor.reduce.ReduceProcessor;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
-import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfig;
 import org.apache.tez.runtime.library.partitioner.HashPartitioner;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -193,60 +193,60 @@ public class TestOrderedWordCount extends Configured implements Tool {
       mapStageConf.setBoolean("mapred.mapper.new-api", true);
       dsd = MRInputHelpers.configureMRInputWithLegacySplitGeneration(mapStageConf, stagingDir, true);
     } else {
-      dsd = MRInputLegacy.createConfigurer(mapStageConf, TextInputFormat.class, inputPath).create();
+      dsd = MRInputLegacy.createConfigBuilder(mapStageConf, TextInputFormat.class, inputPath).build();
     }
 
-    Vertex mapVertex = new Vertex("initialmap", new ProcessorDescriptor(
+    Vertex mapVertex = Vertex.create("initialmap", ProcessorDescriptor.create(
         MapProcessor.class.getName()).setUserPayload(
         TezUtils.createUserPayloadFromConf(mapStageConf))
-        .setHistoryText(mapStageHistoryText)).setTaskLocalFiles(commonLocalResources);
+        .setHistoryText(mapStageHistoryText)).addTaskLocalFiles(commonLocalResources);
     mapVertex.addDataSource("MRInput", dsd);
     vertices.add(mapVertex);
 
     ByteArrayOutputStream iROutputStream = new ByteArrayOutputStream(4096);
     iReduceStageConf.writeXml(iROutputStream);
     String iReduceStageHistoryText = new String(iROutputStream.toByteArray(), "UTF-8");
-    Vertex ivertex = new Vertex("intermediate_reducer", new ProcessorDescriptor(
+    Vertex ivertex = Vertex.create("intermediate_reducer", ProcessorDescriptor.create(
         ReduceProcessor.class.getName())
-            .setUserPayload(TezUtils.createUserPayloadFromConf(iReduceStageConf))
-            .setHistoryText(iReduceStageHistoryText), 2);
-    ivertex.setTaskLocalFiles(commonLocalResources);
+        .setUserPayload(TezUtils.createUserPayloadFromConf(iReduceStageConf))
+        .setHistoryText(iReduceStageHistoryText), 2);
+    ivertex.addTaskLocalFiles(commonLocalResources);
     vertices.add(ivertex);
 
     ByteArrayOutputStream finalReduceOutputStream = new ByteArrayOutputStream(4096);
     finalReduceConf.writeXml(finalReduceOutputStream);
     String finalReduceStageHistoryText = new String(finalReduceOutputStream.toByteArray(), "UTF-8");
     UserPayload finalReducePayload = TezUtils.createUserPayloadFromConf(finalReduceConf);
-    Vertex finalReduceVertex = new Vertex("finalreduce",
-        new ProcessorDescriptor(
+    Vertex finalReduceVertex = Vertex.create("finalreduce",
+        ProcessorDescriptor.create(
             ReduceProcessor.class.getName())
-                .setUserPayload(finalReducePayload)
-                .setHistoryText(finalReduceStageHistoryText), 1);
-    finalReduceVertex.setTaskLocalFiles(commonLocalResources);
+            .setUserPayload(finalReducePayload)
+            .setHistoryText(finalReduceStageHistoryText), 1);
+    finalReduceVertex.addTaskLocalFiles(commonLocalResources);
     finalReduceVertex.addDataSink("MROutput",
-        MROutputLegacy.createConfigurer(finalReduceConf, TextOutputFormat.class, outputPath)
-            .create());
+        MROutputLegacy.createConfigBuilder(finalReduceConf, TextOutputFormat.class, outputPath)
+            .build());
     vertices.add(finalReduceVertex);
 
-    DAG dag = new DAG("OrderedWordCount" + dagIndex);
+    DAG dag = DAG.create("OrderedWordCount" + dagIndex);
     for (int i = 0; i < vertices.size(); ++i) {
       dag.addVertex(vertices.get(i));
     }
 
-    OrderedPartitionedKVEdgeConfigurer edgeConf1 = OrderedPartitionedKVEdgeConfigurer
+    OrderedPartitionedKVEdgeConfig edgeConf1 = OrderedPartitionedKVEdgeConfig
         .newBuilder(Text.class.getName(), IntWritable.class.getName(),
             HashPartitioner.class.getName()).setFromConfiguration(conf)
 	    .configureInput().useLegacyInput().done().build();
     dag.addEdge(
-        new Edge(dag.getVertex("initialmap"), dag.getVertex("intermediate_reducer"),
+        Edge.create(dag.getVertex("initialmap"), dag.getVertex("intermediate_reducer"),
             edgeConf1.createDefaultEdgeProperty()));
 
-    OrderedPartitionedKVEdgeConfigurer edgeConf2 = OrderedPartitionedKVEdgeConfigurer
+    OrderedPartitionedKVEdgeConfig edgeConf2 = OrderedPartitionedKVEdgeConfig
         .newBuilder(IntWritable.class.getName(), Text.class.getName(),
             HashPartitioner.class.getName()).setFromConfiguration(conf)
             .configureInput().useLegacyInput().done().build();
     dag.addEdge(
-        new Edge(dag.getVertex("intermediate_reducer"), dag.getVertex("finalreduce"),
+        Edge.create(dag.getVertex("intermediate_reducer"), dag.getVertex("finalreduce"),
             edgeConf2.createDefaultEdgeProperty()));
 
     return dag;
@@ -330,7 +330,7 @@ public class TestOrderedWordCount extends Configured implements Tool {
     } else {
       tezConf.setBoolean(TezConfiguration.TEZ_AM_SESSION_MODE, false);
     }
-    TezClient tezSession = new TezClient("OrderedWordCountSession", tezConf,
+    TezClient tezSession = TezClient.create("OrderedWordCountSession", tezConf,
         null, instance.credentials);
     tezSession.start();
 
@@ -384,9 +384,9 @@ public class TestOrderedWordCount extends Configured implements Tool {
         }
         if (doPreWarm) {
           LOG.info("Pre-warming Session");
-          PreWarmVertex preWarmVertex = new PreWarmVertex("PreWarm", preWarmNumContainers, dag
+          PreWarmVertex preWarmVertex = PreWarmVertex.create("PreWarm", preWarmNumContainers, dag
               .getVertex("initialmap").getTaskResource());
-          preWarmVertex.setTaskLocalFiles(dag.getVertex("initialmap").getTaskLocalFiles());
+          preWarmVertex.addTaskLocalFiles(dag.getVertex("initialmap").getTaskLocalFiles());
           preWarmVertex.setTaskEnvironment(dag.getVertex("initialmap").getTaskEnvironment());
           preWarmVertex.setTaskLaunchCmdOpts(dag.getVertex("initialmap").getTaskLaunchCmdOpts());
           

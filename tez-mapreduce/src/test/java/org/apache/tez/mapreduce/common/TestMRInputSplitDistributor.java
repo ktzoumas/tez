@@ -29,13 +29,17 @@ import static org.junit.Assert.assertTrue;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.Resource;
+import org.apache.tez.dag.api.event.VertexState;
+import org.apache.tez.dag.api.event.VertexStateUpdate;
 import org.apache.tez.mapreduce.hadoop.MRInputHelpers;
 import org.apache.tez.mapreduce.hadoop.MRJobConfig;
 import org.apache.tez.mapreduce.lib.MRInputUtils;
@@ -68,7 +72,8 @@ public class TestMRInputSplitDistributor {
     MRInputUserPayloadProto.Builder payloadProto = MRInputUserPayloadProto.newBuilder();
     payloadProto.setSplits(splitsProtoBuilder.build());
     payloadProto.setConfigurationBytes(confByteString);
-    UserPayload userPayload = new UserPayload(payloadProto.build().toByteArray());
+    UserPayload userPayload =
+        UserPayload.create(payloadProto.build().toByteString().asReadOnlyByteBuffer());
 
     InputInitializerContext context = new TezRootInputInitializerContextForTest(userPayload);
     MRInputSplitDistributor splitDist = new MRInputSplitDistributor(context);
@@ -89,12 +94,12 @@ public class TestMRInputSplitDistributor {
     assertNotNull(diEvent1.getUserPayload());
     assertNotNull(diEvent2.getUserPayload());
 
-    MRSplitProto event1Proto = MRSplitProto.parseFrom(diEvent1.getUserPayload());
+    MRSplitProto event1Proto = MRSplitProto.parseFrom(ByteString.copyFrom(diEvent1.getUserPayload()));
     InputSplit is1 = MRInputUtils.getOldSplitDetailsFromEvent(event1Proto, new Configuration());
     assertTrue(is1 instanceof InputSplitForTest);
     assertEquals(1, ((InputSplitForTest) is1).identifier);
 
-    MRSplitProto event2Proto = MRSplitProto.parseFrom(diEvent2.getUserPayload());
+    MRSplitProto event2Proto = MRSplitProto.parseFrom(ByteString.copyFrom(diEvent2.getUserPayload()));
     InputSplit is2 = MRInputUtils.getOldSplitDetailsFromEvent(event2Proto, new Configuration());
     assertTrue(is2 instanceof InputSplitForTest);
     assertEquals(2, ((InputSplitForTest) is2).identifier);
@@ -116,7 +121,8 @@ public class TestMRInputSplitDistributor {
     MRInputUserPayloadProto.Builder payloadProto = MRInputUserPayloadProto.newBuilder();
     payloadProto.setSplits(splitsProtoBuilder.build());
     payloadProto.setConfigurationBytes(confByteString);
-    UserPayload userPayload = new UserPayload(payloadProto.build().toByteArray());
+    UserPayload userPayload =
+        UserPayload.create(payloadProto.build().toByteString().asReadOnlyByteBuffer());
 
     InputInitializerContext context = new TezRootInputInitializerContextForTest(userPayload);
     MRInputSplitDistributor splitDist = new MRInputSplitDistributor(context);
@@ -152,7 +158,7 @@ public class TestMRInputSplitDistributor {
 
     TezRootInputInitializerContextForTest(UserPayload payload) throws IOException {
       appId = ApplicationId.newInstance(1000, 200);
-      this.payload = payload == null ? new UserPayload(null) : payload;
+      this.payload = payload == null ? UserPayload.create(null) : payload;
     }
 
     @Override
@@ -202,6 +208,11 @@ public class TestMRInputSplitDistributor {
 
     @Override
     public int getVertexNumTasks(String vertexName) {
+      throw new UnsupportedOperationException("getVertexNumTasks not implemented in this mock");
+    }
+
+    @Override
+    public void registerForVertexStateUpdates(String vertexName, Set<VertexState> stateSet) {
       throw new UnsupportedOperationException("getVertexNumTasks not implemented in this mock");
     }
 

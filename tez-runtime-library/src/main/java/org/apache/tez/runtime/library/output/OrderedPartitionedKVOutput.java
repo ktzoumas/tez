@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
@@ -65,6 +66,7 @@ import com.google.protobuf.ByteString;
  * key/value pairs written to it. It also partitions the output based on a
  * {@link Partitioner}
  */
+@Public
 public class OrderedPartitionedKVOutput extends AbstractLogicalOutput {
 
   private static final Log LOG = LogFactory.getLog(OrderedPartitionedKVOutput.class);
@@ -192,20 +194,21 @@ public class OrderedPartitionedKVOutput extends AbstractLogicalOutput {
 
     payloadBuilder.setRunDuration((int) ((endTime - startTime) / 1000));
     DataMovementEventPayloadProto payloadProto = payloadBuilder.build();
-    byte[] payload = payloadProto.toByteArray();
+    ByteBuffer payload = payloadProto.toByteString().asReadOnlyByteBuffer();
 
     long outputSize = getContext().getCounters()
         .findCounter(TaskCounter.OUTPUT_BYTES).getValue();
     VertexManagerEventPayloadProto.Builder vmBuilder = VertexManagerEventPayloadProto
         .newBuilder();
     vmBuilder.setOutputSize(outputSize);
-    VertexManagerEvent vmEvent = new VertexManagerEvent(
-        getContext().getDestinationVertexName(), vmBuilder.build().toByteArray());    
+    VertexManagerEvent vmEvent = VertexManagerEvent.create(
+        getContext().getDestinationVertexName(), vmBuilder.build().toByteString().asReadOnlyByteBuffer());
 
     List<Event> events = Lists.newArrayListWithCapacity(getNumPhysicalOutputs() + 1);
     events.add(vmEvent);
 
-    CompositeDataMovementEvent csdme = new CompositeDataMovementEvent(0, getNumPhysicalOutputs(), payload);
+    CompositeDataMovementEvent csdme =
+        CompositeDataMovementEvent.create(0, getNumPhysicalOutputs(), payload);
     events.add(csdme);
 
     return events;

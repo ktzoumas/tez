@@ -19,6 +19,7 @@ package org.apache.tez.dag.api;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,7 +50,6 @@ import org.apache.tez.common.counters.TezCounters;
 import org.apache.tez.dag.api.EdgeProperty.DataMovementType;
 import org.apache.tez.dag.api.EdgeProperty.DataSourceType;
 import org.apache.tez.dag.api.EdgeProperty.SchedulingType;
-import org.apache.tez.dag.api.VertexLocationHint.TaskLocationHint;
 import org.apache.tez.dag.api.client.StatusGetOpts;
 import org.apache.tez.dag.api.client.rpc.DAGClientAMProtocolRPC.TezSessionStatusProto;
 import org.apache.tez.dag.api.records.DAGProtos;
@@ -173,12 +173,12 @@ public class DagTypeConverters {
     List<TaskLocationHint> outputList = new ArrayList<TaskLocationHint>();
 
     for(PlanTaskLocationHint inputHint : locationHints){
-      TaskLocationHint outputHint = new TaskLocationHint(
+      TaskLocationHint outputHint = TaskLocationHint.createTaskLocationHint(
           new HashSet<String>(inputHint.getHostList()),
           new HashSet<String>(inputHint.getRackList()));
       outputList.add(outputHint);
     }
-    return new VertexLocationHint(outputList);
+    return VertexLocationHint.create(outputList);
   }
   
   // notes re HDFS URL handling:
@@ -236,15 +236,16 @@ public class DagTypeConverters {
 
   public static EdgeProperty createEdgePropertyMapFromDAGPlan(EdgePlan edge) {
     if (edge.getDataMovementType() == PlanEdgeDataMovementType.CUSTOM) {
-      return new EdgeProperty(
-          (edge.hasEdgeManager() ? convertEdgeManagerPluginDescriptorFromDAGPlan(edge.getEdgeManager()) : null),
+      return EdgeProperty.create(
+          (edge.hasEdgeManager() ?
+              convertEdgeManagerPluginDescriptorFromDAGPlan(edge.getEdgeManager()) : null),
           convertFromDAGPlan(edge.getDataSourceType()),
           convertFromDAGPlan(edge.getSchedulingType()),
           convertOutputDescriptorFromDAGPlan(edge.getEdgeSource()),
           convertInputDescriptorFromDAGPlan(edge.getEdgeDestination())
       );
     } else {
-      return new EdgeProperty(
+      return EdgeProperty.create(
           convertFromDAGPlan(edge.getDataMovementType()),
           convertFromDAGPlan(edge.getDataSourceType()),
           convertFromDAGPlan(edge.getSchedulingType()),
@@ -319,9 +320,10 @@ public class DagTypeConverters {
       TezEntityDescriptorProto proto) {
     UserPayload userPayload = null;
     if (proto.hasUserPayload()) {
-      userPayload = new UserPayload(proto.getUserPayload().toByteArray(), proto.getVersion());
+      userPayload =
+          UserPayload.create(proto.getUserPayload().asReadOnlyByteBuffer(), proto.getVersion());
     } else {
-      userPayload = new UserPayload((byte[]) null, -1);
+      userPayload = UserPayload.create(null, -1);
     }
     return userPayload;
   }
@@ -330,49 +332,49 @@ public class DagTypeConverters {
       TezEntityDescriptorProto proto) {
     String className = proto.getClassName();
     UserPayload payload = convertTezUserPayloadFromDAGPlan(proto);
-    return new InputDescriptor(className).setUserPayload(payload);
+    return InputDescriptor.create(className).setUserPayload(payload);
   }
 
   public static OutputDescriptor convertOutputDescriptorFromDAGPlan(
       TezEntityDescriptorProto proto) {
     String className = proto.getClassName();
     UserPayload payload = convertTezUserPayloadFromDAGPlan(proto);
-    return new OutputDescriptor(className).setUserPayload(payload);
+    return OutputDescriptor.create(className).setUserPayload(payload);
   }
 
   public static InputInitializerDescriptor convertInputInitializerDescriptorFromDAGPlan(
       TezEntityDescriptorProto proto) {
     String className = proto.getClassName();
     UserPayload payload = convertTezUserPayloadFromDAGPlan(proto);
-    return new InputInitializerDescriptor(className).setUserPayload(payload);
+    return InputInitializerDescriptor.create(className).setUserPayload(payload);
   }
 
   public static OutputCommitterDescriptor convertOutputCommitterDescriptorFromDAGPlan(
       TezEntityDescriptorProto proto) {
     String className = proto.getClassName();
     UserPayload payload = convertTezUserPayloadFromDAGPlan(proto);
-    return new OutputCommitterDescriptor(className).setUserPayload(payload);
+    return OutputCommitterDescriptor.create(className).setUserPayload(payload);
   }
 
   public static VertexManagerPluginDescriptor convertVertexManagerPluginDescriptorFromDAGPlan(
       TezEntityDescriptorProto proto) {
     String className = proto.getClassName();
     UserPayload payload = convertTezUserPayloadFromDAGPlan(proto);
-    return new VertexManagerPluginDescriptor(className).setUserPayload(payload);
+    return VertexManagerPluginDescriptor.create(className).setUserPayload(payload);
   }
 
   public static EdgeManagerPluginDescriptor convertEdgeManagerPluginDescriptorFromDAGPlan(
       TezEntityDescriptorProto proto) {
     String className = proto.getClassName();
     UserPayload payload = convertTezUserPayloadFromDAGPlan(proto);
-    return new EdgeManagerPluginDescriptor(className).setUserPayload(payload);
+    return EdgeManagerPluginDescriptor.create(className).setUserPayload(payload);
   }
 
   public static ProcessorDescriptor convertProcessorDescriptorFromDAGPlan(
       TezEntityDescriptorProto proto) {
     String className = proto.getClassName();
     UserPayload payload = convertTezUserPayloadFromDAGPlan(proto);
-    return new ProcessorDescriptor(className).setUserPayload(payload);
+    return ProcessorDescriptor.create(className).setUserPayload(payload);
   }
 
   public static TezAppMasterStatus convertTezSessionStatusFromProto(
@@ -582,13 +584,13 @@ public class DagTypeConverters {
     List<TaskLocationHint> outputList = new ArrayList<TaskLocationHint>(
       proto.getTaskLocationHintsCount());
     for(PlanTaskLocationHint inputHint : proto.getTaskLocationHintsList()){
-      TaskLocationHint outputHint = new TaskLocationHint(
-        new HashSet<String>(inputHint.getHostList()),
-        new HashSet<String>(inputHint.getRackList()));
+      TaskLocationHint outputHint = TaskLocationHint.createTaskLocationHint(
+          new HashSet<String>(inputHint.getHostList()),
+          new HashSet<String>(inputHint.getRackList()));
       outputList.add(outputHint);
     }
 
-    return new VertexLocationHint(outputList);
+    return VertexLocationHint.create(outputList);
   }
 
   public static VertexLocationHintProto convertVertexLocationHintToProto(
@@ -600,8 +602,8 @@ public class DagTypeConverters {
         vertexLocationHint.getTaskLocationHints()) {
         PlanTaskLocationHint.Builder taskLHBuilder =
           PlanTaskLocationHint.newBuilder();
-        if (taskLocationHint.getDataLocalHosts() != null) {
-          taskLHBuilder.addAllHost(taskLocationHint.getDataLocalHosts());
+        if (taskLocationHint.getHosts() != null) {
+          taskLHBuilder.addAllHost(taskLocationHint.getHosts());
         }
         if (taskLocationHint.getRacks() != null) {
           taskLHBuilder.addAllRack(taskLocationHint.getRacks());
@@ -612,12 +614,12 @@ public class DagTypeConverters {
     return builder.build();
   }
 
-  public static UserPayload convertToTezUserPayload(@Nullable byte[] payload, int version) {
-    return new UserPayload(payload, version);
+  public static UserPayload convertToTezUserPayload(@Nullable ByteBuffer payload, int version) {
+    return UserPayload.create(payload, version);
   }
 
   @Nullable
-  public static byte[] convertFromTezUserPayload(@Nullable UserPayload payload) {
+  public static ByteBuffer convertFromTezUserPayload(@Nullable UserPayload payload) {
     if (payload == null) {
       return null;
     }

@@ -95,8 +95,8 @@ public class MRInputSplitDistributor extends InputInitializer {
     updatedPayloadBuilder.clearSplits();
 
     List<Event> events = Lists.newArrayListWithCapacity(this.splitsProto.getSplitsCount() + 1);
-    InputUpdatePayloadEvent updatePayloadEvent = new InputUpdatePayloadEvent(
-        updatedPayloadBuilder.build().toByteArray());
+    InputUpdatePayloadEvent updatePayloadEvent = InputUpdatePayloadEvent.create(
+        updatedPayloadBuilder.build().toByteString().asReadOnlyByteBuffer());
 
     events.add(updatePayloadEvent);
     int count = 0;
@@ -108,16 +108,17 @@ public class MRInputSplitDistributor extends InputInitializer {
       if (sendSerializedEvents) {
         // Unnecessary array copy, can be avoided by using ByteBuffer instead of
         // a raw array.
-        diEvent = new InputDataInformationEvent(count++, mrSplit.toByteArray());
+        diEvent = InputDataInformationEvent.createWithSerializedPayload(count++,
+            mrSplit.toByteString().asReadOnlyByteBuffer());
       } else {
         if (useNewApi) {
           org.apache.hadoop.mapreduce.InputSplit newInputSplit = MRInputUtils
               .getNewSplitDetailsFromEvent(mrSplit, conf);
-          diEvent = new InputDataInformationEvent(count++, newInputSplit);
+          diEvent = InputDataInformationEvent.createWithObjectPayload(count++, newInputSplit);
         } else {
           org.apache.hadoop.mapred.InputSplit oldInputSplit = MRInputUtils
               .getOldSplitDetailsFromEvent(mrSplit, conf);
-          diEvent = new InputDataInformationEvent(count++, oldInputSplit);
+          diEvent = InputDataInformationEvent.createWithObjectPayload(count++, oldInputSplit);
         }
       }
       events.add(diEvent);

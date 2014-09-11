@@ -87,6 +87,7 @@ class ShuffleScheduler {
   private final TezCounter reduceBytesDecompressed;
   private final TezCounter failedShuffleCounter;
   private final TezCounter bytesShuffledToDisk;
+  private final TezCounter bytesShuffledToDiskDirect;
   private final TezCounter bytesShuffledToMem;
 
   private final long startTime;
@@ -111,6 +112,7 @@ class ShuffleScheduler {
                           TezCounter reduceBytesDecompressed,
                           TezCounter failedShuffleCounter,
                           TezCounter bytesShuffledToDisk,
+                          TezCounter bytesShuffledToDiskDirect,
                           TezCounter bytesShuffledToMem) {
     this.inputContext = inputContext;
     this.numInputs = numberOfInputs;
@@ -124,6 +126,7 @@ class ShuffleScheduler {
     this.reduceBytesDecompressed = reduceBytesDecompressed;
     this.failedShuffleCounter = failedShuffleCounter;
     this.bytesShuffledToDisk = bytesShuffledToDisk;
+    this.bytesShuffledToDiskDirect = bytesShuffledToDiskDirect;
     this.bytesShuffledToMem = bytesShuffledToMem;
     this.startTime = System.currentTimeMillis();
     this.lastProgressTime = startTime;
@@ -144,7 +147,7 @@ class ShuffleScheduler {
             TezRuntimeConfiguration.TEZ_RUNTIME_SHUFFLE_FETCH_MAX_TASK_OUTPUT_AT_ONCE_DEFAULT));
     
     this.skippedInputCounter = inputContext.getCounters().findCounter(TaskCounter.NUM_SKIPPED_INPUTS);
-    
+
     LOG.info("ShuffleScheduler running for sourceVertex: "
         + inputContext.getSourceVertexName() + " with configuration: "
         + "maxFetchFailuresBeforeReporting=" + maxFetchFailuresBeforeReporting
@@ -158,19 +161,25 @@ class ShuffleScheduler {
                                          MapHost host,
                                          long bytesCompressed,
                                          long bytesDecompressed,
-                                         long milis,
+                                         long millis,
                                          MapOutput output
                                          ) throws IOException {
-    failureCounts.remove(srcAttemptIdentifier);
-    if (host != null) {
-      hostFailures.remove(host.getHostIdentifier());
-    }
-    
+
     if (!isInputFinished(srcAttemptIdentifier.getInputIdentifier().getInputIndex())) {
       if (output != null) {
+
+        failureCounts.remove(srcAttemptIdentifier);
+        if (host != null) {
+          hostFailures.remove(host.getHostIdentifier());
+        }
+
         output.commit();
+        logIndividualFetchComplete(millis, bytesCompressed, bytesDecompressed, output,
+            srcAttemptIdentifier);
         if (output.getType() == Type.DISK) {
           bytesShuffledToDisk.increment(bytesCompressed);
+        } else if (output.getType() == Type.DISK_DIRECT) {
+          bytesShuffledToDiskDirect.increment(bytesCompressed);
         } else {
           bytesShuffledToMem.increment(bytesCompressed);
         }
@@ -212,13 +221,29 @@ class ShuffleScheduler {
     // TODO NEWTEZ Should this be releasing the output, if not committed ? Possible memory leak in case of speculation.
   }
 
+  private void logIndividualFetchComplete(long millis, long bytesCompressed, long bytesDecompressed,
+                                          MapOutput output,
+                                          InputAttemptIdentifier srcAttemptIdentifier) {
+    double rate = 0;
+    if (millis != 0) {
+      rate = bytesCompressed / ((double) millis / 1000);
+      rate = rate / (1024 * 1024);
+    }
+    LOG.info(
+        "Completed fetch for attempt: " + srcAttemptIdentifier + " to " + output.getType() +
+            ", CompressedSize=" + bytesCompressed + ", DecompressedSize=" + bytesDecompressed +
+            ",EndTime=" + System.currentTimeMillis() + ", TimeTaken=" + millis + ", Rate=" +
+            mbpsFormat.format(rate) + " MB/s");
+  }
+
   private void logProgress() {
-    float mbs = (float) totalBytesShuffledTillNow / (1024 * 1024);
-    int mapsDone = numInputs - remainingMaps;
+    double mbs = (double) totalBytesShuffledTillNow / (1024 * 1024);
+    int inputsDone = numInputs - remainingMaps;
     long secsSinceStart = (System.currentTimeMillis() - startTime) / 1000 + 1;
 
-    float transferRate = mbs / secsSinceStart;
-    LOG.info("copy(" + mapsDone + " of " + numInputs + " at "
+    double transferRate = mbs / secsSinceStart;
+    LOG.info("copy(" + inputsDone + " of " + numInputs +
+        ". Transfer rate (CumulativeDataFetched/TimeSinceInputStarted)) "
         + mbpsFormat.format(transferRate) + " MB/s)");
   }
 
@@ -291,10 +316,10 @@ class ShuffleScheduler {
               inputContext.getSourceVertexName(), srcAttempt.getInputIdentifier().getInputIndex(),
               srcAttempt.getAttemptNumber()) + " to AM.");
       List<Event> failedEvents = Lists.newArrayListWithCapacity(1);
-      failedEvents.add(new InputReadErrorEvent("Fetch failure for "
+      failedEvents.add(InputReadErrorEvent.create("Fetch failure for "
           + TezRuntimeUtils.getTaskAttemptIdentifier(
-              inputContext.getSourceVertexName(), srcAttempt.getInputIdentifier().getInputIndex(),
-              srcAttempt.getAttemptNumber()) + " to jobtracker.", srcAttempt.getInputIdentifier()
+          inputContext.getSourceVertexName(), srcAttempt.getInputIdentifier().getInputIndex(),
+          srcAttempt.getAttemptNumber()) + " to jobtracker.", srcAttempt.getInputIdentifier()
           .getInputIndex(), srcAttempt.getAttemptNumber()));
 
       inputContext.sendEvents(failedEvents);      

@@ -19,6 +19,7 @@
 package org.apache.tez.dag.library.vertexmanager;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -68,26 +69,26 @@ public class TestShuffleVertexManager {
     HashMap<String, EdgeProperty> mockInputVertices = 
         new HashMap<String, EdgeProperty>();
     String mockSrcVertexId1 = "Vertex1";
-    EdgeProperty eProp1 = new EdgeProperty(
+    EdgeProperty eProp1 = EdgeProperty.create(
         EdgeProperty.DataMovementType.SCATTER_GATHER,
         EdgeProperty.DataSourceType.PERSISTED,
-        SchedulingType.SEQUENTIAL, 
-        new OutputDescriptor("out"),
-        new InputDescriptor("in"));
+        SchedulingType.SEQUENTIAL,
+        OutputDescriptor.create("out"),
+        InputDescriptor.create("in"));
     String mockSrcVertexId2 = "Vertex2";
-    EdgeProperty eProp2 = new EdgeProperty(
+    EdgeProperty eProp2 = EdgeProperty.create(
         EdgeProperty.DataMovementType.SCATTER_GATHER,
         EdgeProperty.DataSourceType.PERSISTED,
-        SchedulingType.SEQUENTIAL, 
-        new OutputDescriptor("out"),
-        new InputDescriptor("in"));
+        SchedulingType.SEQUENTIAL,
+        OutputDescriptor.create("out"),
+        InputDescriptor.create("in"));
     String mockSrcVertexId3 = "Vertex3";
-    EdgeProperty eProp3 = new EdgeProperty(
+    EdgeProperty eProp3 = EdgeProperty.create(
         EdgeProperty.DataMovementType.BROADCAST,
-        EdgeProperty.DataSourceType.PERSISTED, 
-        SchedulingType.SEQUENTIAL, 
-        new OutputDescriptor("out"),
-        new InputDescriptor("in"));
+        EdgeProperty.DataSourceType.PERSISTED,
+        SchedulingType.SEQUENTIAL,
+        OutputDescriptor.create("out"),
+        InputDescriptor.create("in"));
     
     final String mockManagedVertexId = "Vertex4";
     
@@ -101,8 +102,8 @@ public class TestShuffleVertexManager {
     when(mockContext.getVertexNumTasks(mockManagedVertexId)).thenReturn(4);
 
     //Check via setters
-    ShuffleVertexManager.ShuffleVertexManagerConfigurer configurer = ShuffleVertexManager
-        .createConfigurer(null);
+    ShuffleVertexManager.ShuffleVertexManagerConfigBuilder configurer = ShuffleVertexManager
+        .createConfigBuilder(null);
     VertexManagerPluginDescriptor pluginDesc = configurer.setAutoReduceParallelism(true)
         .setDesiredTaskInputSize(1000l)
         .setMinTaskParallelism(10).setSlowStartMaxSrcCompletionFraction(0.5f).build();
@@ -119,7 +120,7 @@ public class TestShuffleVertexManager {
     Assert.assertTrue(manager.slowStartMinSrcCompletionFraction == 0.25f);
     Assert.assertTrue(manager.slowStartMaxSrcCompletionFraction == 0.5f);
 
-    configurer = ShuffleVertexManager.createConfigurer(null);
+    configurer = ShuffleVertexManager.createConfigBuilder(null);
     pluginDesc = configurer.setAutoReduceParallelism(false).build();
     when(mockContext.getUserPayload()).thenReturn(pluginDesc.getUserPayload());
 
@@ -215,9 +216,9 @@ public class TestShuffleVertexManager {
     when(mockContext.getVertexNumTasks(mockSrcVertexId1)).thenReturn(2);
     when(mockContext.getVertexNumTasks(mockSrcVertexId2)).thenReturn(2);
 
-    byte[] payload =
-        VertexManagerEventPayloadProto.newBuilder().setOutputSize(5000L).build().toByteArray();
-    VertexManagerEvent vmEvent = new VertexManagerEvent("Vertex", payload);
+    ByteBuffer payload =
+        VertexManagerEventPayloadProto.newBuilder().setOutputSize(5000L).build().toByteString().asReadOnlyByteBuffer();
+    VertexManagerEvent vmEvent = VertexManagerEvent.create("Vertex", payload);
     // parallelism not change due to large data size
     manager = createManager(conf, mockContext, 0.1f, 0.1f);
     manager.onVertexStarted(null);
@@ -236,8 +237,8 @@ public class TestShuffleVertexManager {
     // parallelism changed due to small data size
     scheduledTasks.clear();
     payload =
-        VertexManagerEventPayloadProto.newBuilder().setOutputSize(500L).build().toByteArray();
-    vmEvent = new VertexManagerEvent("Vertex", payload);
+        VertexManagerEventPayloadProto.newBuilder().setOutputSize(500L).build().toByteString().asReadOnlyByteBuffer();
+    vmEvent = VertexManagerEvent.create("Vertex", payload);
     
     manager = createManager(conf, mockContext, 0.5f, 0.5f);
     manager.onVertexStarted(null);
@@ -283,7 +284,7 @@ public class TestShuffleVertexManager {
     
     EdgeManagerPlugin edgeManager = newEdgeManagers.values().iterator().next();
     Map<Integer, List<Integer>> targets = Maps.newHashMap();
-    DataMovementEvent dmEvent = new DataMovementEvent(1, new byte[0]);
+    DataMovementEvent dmEvent = DataMovementEvent.create(1, ByteBuffer.wrap(new byte[0]));
     // 4 source task outputs - same as original number of partitions
     Assert.assertEquals(4, edgeManager.getNumSourceTaskPhysicalOutputs(0));
     // 4 destination task inputs - 2 source tasks + 2 merged partitions
@@ -295,7 +296,7 @@ public class TestShuffleVertexManager {
     Assert.assertEquals(1, e.getValue().size());
     Assert.assertEquals(3, e.getValue().get(0).intValue());
     targets.clear();
-    dmEvent = new DataMovementEvent(2, new byte[0]);
+    dmEvent = DataMovementEvent.create(2, ByteBuffer.wrap(new byte[0]));
     edgeManager.routeDataMovementEventToDestination(dmEvent, 0, dmEvent.getSourceIndex(), targets);
     Assert.assertEquals(1, targets.size());
     e = targets.entrySet().iterator().next();
@@ -321,26 +322,26 @@ public class TestShuffleVertexManager {
     HashMap<String, EdgeProperty> mockInputVertices = 
         new HashMap<String, EdgeProperty>();
     String mockSrcVertexId1 = "Vertex1";
-    EdgeProperty eProp1 = new EdgeProperty(
+    EdgeProperty eProp1 = EdgeProperty.create(
         EdgeProperty.DataMovementType.SCATTER_GATHER,
         EdgeProperty.DataSourceType.PERSISTED,
-        SchedulingType.SEQUENTIAL, 
-        new OutputDescriptor("out"),
-        new InputDescriptor("in"));
+        SchedulingType.SEQUENTIAL,
+        OutputDescriptor.create("out"),
+        InputDescriptor.create("in"));
     String mockSrcVertexId2 = "Vertex2";
-    EdgeProperty eProp2 = new EdgeProperty(
+    EdgeProperty eProp2 = EdgeProperty.create(
         EdgeProperty.DataMovementType.SCATTER_GATHER,
         EdgeProperty.DataSourceType.PERSISTED,
-        SchedulingType.SEQUENTIAL, 
-        new OutputDescriptor("out"),
-        new InputDescriptor("in"));
+        SchedulingType.SEQUENTIAL,
+        OutputDescriptor.create("out"),
+        InputDescriptor.create("in"));
     String mockSrcVertexId3 = "Vertex3";
-    EdgeProperty eProp3 = new EdgeProperty(
+    EdgeProperty eProp3 = EdgeProperty.create(
         EdgeProperty.DataMovementType.BROADCAST,
-        EdgeProperty.DataSourceType.PERSISTED, 
-        SchedulingType.SEQUENTIAL, 
-        new OutputDescriptor("out"),
-        new InputDescriptor("in"));
+        EdgeProperty.DataSourceType.PERSISTED,
+        SchedulingType.SEQUENTIAL,
+        OutputDescriptor.create("out"),
+        InputDescriptor.create("in"));
     
     String mockManagedVertexId = "Vertex4";
     

@@ -18,6 +18,7 @@
 
 package org.apache.tez.runtime.api.events;
 
+import java.nio.ByteBuffer;
 import java.util.Iterator;
 
 import org.apache.hadoop.classification.InterfaceAudience.Public;
@@ -42,7 +43,13 @@ public class CompositeDataMovementEvent extends Event {
   protected final int count;
   protected int version;
 
-  protected final byte[] userPayload;
+  protected final ByteBuffer userPayload;
+
+  private CompositeDataMovementEvent(int srcIndexStart, int count, ByteBuffer userPayload) {
+    this.sourceIndexStart = srcIndexStart;
+    this.count = count;
+    this.userPayload = userPayload;
+  }
 
   /**
    * @param srcIndexStart
@@ -54,10 +61,9 @@ public class CompositeDataMovementEvent extends Event {
    * @param userPayload
    *          the common payload between all the events.
    */
-  public CompositeDataMovementEvent(int srcIndexStart, int count, byte[] userPayload) {
-    this.sourceIndexStart = srcIndexStart;
-    this.count = count;
-    this.userPayload = userPayload;
+  public static CompositeDataMovementEvent create(int srcIndexStart, int count,
+                                                  ByteBuffer userPayload) {
+    return new CompositeDataMovementEvent(srcIndexStart, count, userPayload);
   }
 
   public int getSourceIndexStart() {
@@ -68,8 +74,8 @@ public class CompositeDataMovementEvent extends Event {
     return count;
   }
 
-  public byte[] getUserPayload() {
-    return userPayload;
+  public ByteBuffer getUserPayload() {
+    return userPayload == null ? null : userPayload.asReadOnlyBuffer();
   }
 
   public void setVersion(int version) {
@@ -97,7 +103,7 @@ public class CompositeDataMovementEvent extends Event {
 
           @Override
           public DataMovementEvent next() {
-            DataMovementEvent dmEvent = new DataMovementEvent(currentPos, userPayload);
+            DataMovementEvent dmEvent = DataMovementEvent.create(currentPos, userPayload);
             currentPos++;
             dmEvent.setVersion(version);
             return dmEvent;

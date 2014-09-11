@@ -185,9 +185,9 @@ public class TestMRRJobsDAGApi {
   public void testSleepJob() throws TezException, IOException, InterruptedException {
     SleepProcessorConfig spConf = new SleepProcessorConfig(1);
 
-    DAG dag = new DAG("TezSleepProcessor");
-    Vertex vertex = new Vertex("SleepVertex", new ProcessorDescriptor(
-        SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 1,
+    DAG dag = DAG.create("TezSleepProcessor");
+    Vertex vertex = Vertex.create("SleepVertex", ProcessorDescriptor.create(
+            SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 1,
         Resource.newInstance(1024, 1));
     dag.addVertex(vertex);
 
@@ -197,7 +197,7 @@ public class TestMRRJobsDAGApi {
     remoteFs.mkdirs(remoteStagingDir);
     tezConf.set(TezConfiguration.TEZ_AM_STAGING_DIR, remoteStagingDir.toString());
 
-    TezClient tezSession = new TezClient("TezSleepProcessor", tezConf, false);
+    TezClient tezSession = TezClient.create("TezSleepProcessor", tezConf, false);
     tezSession.start();
 
     DAGClient dagClient = tezSession.submitDAG(dag);
@@ -229,14 +229,14 @@ public class TestMRRJobsDAGApi {
           .nextInt(100000))));
       remoteFs.mkdirs(remoteStagingDir);
       tezConf.set(TezConfiguration.TEZ_AM_STAGING_DIR, remoteStagingDir.toString());
-      tezSession = new TezClient("OrderedWordCountSession", tezConf, true);
+      tezSession = TezClient.create("OrderedWordCountSession", tezConf, true);
       tezSession.start();
 
       SleepProcessorConfig spConf = new SleepProcessorConfig(1);
       for (int dagIndex = 1; dagIndex <= 2; dagIndex++) {
-        DAG dag = new DAG("TezSleepProcessor");
-        Vertex vertex = new Vertex("SleepVertex", new ProcessorDescriptor(
-            SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 1,
+        DAG dag = DAG.create("TezSleepProcessor");
+        Vertex vertex = Vertex.create("SleepVertex", ProcessorDescriptor.create(
+                SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 1,
             Resource.newInstance(1024, 1));
         dag.addVertex(vertex);
 
@@ -273,9 +273,9 @@ public class TestMRRJobsDAGApi {
   public void testNonDefaultFSStagingDir() throws Exception {
     SleepProcessorConfig spConf = new SleepProcessorConfig(1);
 
-    DAG dag = new DAG("TezSleepProcessor");
-    Vertex vertex = new Vertex("SleepVertex", new ProcessorDescriptor(
-        SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 1,
+    DAG dag = DAG.create("TezSleepProcessor");
+    Vertex vertex = Vertex.create("SleepVertex", ProcessorDescriptor.create(
+            SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 1,
         Resource.newInstance(1024, 1));
     dag.addVertex(vertex);
 
@@ -287,7 +287,7 @@ public class TestMRRJobsDAGApi {
     localFs.mkdirs(stagingDir);
     tezConf.set(TezConfiguration.TEZ_AM_STAGING_DIR, stagingDir.toString());
 
-    TezClient tezSession = new TezClient("TezSleepProcessor", tezConf, false);
+    TezClient tezSession = TezClient.create("TezSleepProcessor", tezConf, false);
     tezSession.start();
 
     DAGClient dagClient = tezSession.submitDAG(dag);
@@ -315,9 +315,9 @@ public class TestMRRJobsDAGApi {
       InterruptedException, TezException, ClassNotFoundException, YarnException {
     SleepProcessorConfig spConf = new SleepProcessorConfig(1);
 
-    DAG dag = new DAG("TezSleepProcessorHistoryLogging");
-    Vertex vertex = new Vertex("SleepVertex", new ProcessorDescriptor(
-        SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 2,
+    DAG dag = DAG.create("TezSleepProcessorHistoryLogging");
+    Vertex vertex = Vertex.create("SleepVertex", ProcessorDescriptor.create(
+            SleepProcessor.class.getName()).setUserPayload(spConf.toUserPayload()), 2,
         Resource.newInstance(1024, 1));
     dag.addVertex(vertex);
 
@@ -335,7 +335,7 @@ public class TestMRRJobsDAGApi {
         localFs.makeQualified(historyLogDir).toString());
 
     tezConf.setBoolean(TezConfiguration.TEZ_AM_SESSION_MODE, false);
-    TezClient tezSession = new TezClient("TezSleepProcessorHistoryLogging", tezConf);
+    TezClient tezSession = TezClient.create("TezSleepProcessorHistoryLogging", tezConf);
     tezSession.start();
 
     DAGClient dagClient = tezSession.submitDAG(dag);
@@ -520,7 +520,7 @@ public class TestMRRJobsDAGApi {
     TezConfiguration tezConf = new TezConfiguration(mrrTezCluster.getConfig());
     tezConf.set(TezConfiguration.TEZ_AM_STAGING_DIR, remoteStagingDir.toString());
 
-    TezClient tezSession = new TezClient("testrelocalizationsession", tezConf, true);
+    TezClient tezSession = TezClient.create("testrelocalizationsession", tezConf, true);
     tezSession.start();
     Assert.assertEquals(TezAppMasterStatus.INITIALIZING, tezSession.getAppMasterStatus());
     return tezSession;
@@ -538,7 +538,7 @@ public class TestMRRJobsDAGApi {
     tezConf.set(TezConfiguration.TEZ_AM_STAGING_DIR,
         remoteStagingDir.toString());
 
-    TezClient tezSession = new TezClient("testsession", tezConf, true);
+    TezClient tezSession = TezClient.create("testsession", tezConf, true);
     tezSession.start();
     Assert.assertEquals(TezAppMasterStatus.INITIALIZING,
         tezSession.getAppMasterStatus());
@@ -657,7 +657,7 @@ public class TestMRRJobsDAGApi {
     UserPayload stage2Payload = TezUtils.createUserPayloadFromConf(stage2Conf);
     UserPayload stage3Payload = TezUtils.createUserPayloadFromConf(stage3Conf);
     
-    DAG dag = new DAG("testMRRSleepJobDagSubmit-" + random.nextInt(1000));
+    DAG dag = DAG.create("testMRRSleepJobDagSubmit-" + random.nextInt(1000));
 
     Class<? extends InputInitializer> inputInitializerClazz =
         genSplitsInAM ?
@@ -672,26 +672,27 @@ public class TestMRRJobsDAGApi {
           .configureMRInputWithLegacySplitGeneration(stage1Conf, remoteStagingDir, true);
     } else {
       if (initializerClass == null) {
-        dsd = MRInputLegacy.createConfigurer(stage1Conf, SleepInputFormat.class).create();
+        dsd = MRInputLegacy.createConfigBuilder(stage1Conf, SleepInputFormat.class).build();
       } else {
-        InputInitializerDescriptor iid = new InputInitializerDescriptor(inputInitializerClazz.getName());
-        dsd = MRInputLegacy.createConfigurer(stage1Conf, SleepInputFormat.class)
-            .setCustomInitializerDescriptor(iid).create();
+        InputInitializerDescriptor iid =
+            InputInitializerDescriptor.create(inputInitializerClazz.getName());
+        dsd = MRInputLegacy.createConfigBuilder(stage1Conf, SleepInputFormat.class)
+            .setCustomInitializerDescriptor(iid).build();
       }
     }
 
-    Vertex stage1Vertex = new Vertex("map", new ProcessorDescriptor(
-        MapProcessor.class.getName()).setUserPayload(stage1Payload),
+    Vertex stage1Vertex = Vertex.create("map", ProcessorDescriptor.create(
+            MapProcessor.class.getName()).setUserPayload(stage1Payload),
         dsd.getNumberOfShards(), Resource.newInstance(256, 1));
     stage1Vertex.addDataSource("MRInput", dsd);
-    Vertex stage2Vertex = new Vertex("ireduce", new ProcessorDescriptor(
-        ReduceProcessor.class.getName()).setUserPayload(stage2Payload),
+    Vertex stage2Vertex = Vertex.create("ireduce", ProcessorDescriptor.create(
+            ReduceProcessor.class.getName()).setUserPayload(stage2Payload),
         1, Resource.newInstance(256, 1));
-    Vertex stage3Vertex = new Vertex("reduce", new ProcessorDescriptor(
-        ReduceProcessor.class.getName()).setUserPayload(stage3Payload),
+    Vertex stage3Vertex = Vertex.create("reduce", ProcessorDescriptor.create(
+            ReduceProcessor.class.getName()).setUserPayload(stage3Payload),
         1, Resource.newInstance(256, 1));
     stage3Vertex.addDataSink("MROutput",
-        MROutputLegacy.createConfigurer(stage3Conf, NullOutputFormat.class).create());
+        MROutputLegacy.createConfigBuilder(stage3Conf, NullOutputFormat.class).build());
 
     // TODO env, resources
 
@@ -699,16 +700,18 @@ public class TestMRRJobsDAGApi {
     dag.addVertex(stage2Vertex);
     dag.addVertex(stage3Vertex);
 
-    Edge edge1 = new Edge(stage1Vertex, stage2Vertex, new EdgeProperty(
+    Edge edge1 = Edge.create(stage1Vertex, stage2Vertex, EdgeProperty.create(
         DataMovementType.SCATTER_GATHER, DataSourceType.PERSISTED,
-        SchedulingType.SEQUENTIAL, new OutputDescriptor(
-        OrderedPartitionedKVOutput.class.getName()).setUserPayload(stage2Payload), new InputDescriptor(
-                OrderedGroupedInputLegacy.class.getName()).setUserPayload(stage2Payload)));
-    Edge edge2 = new Edge(stage2Vertex, stage3Vertex, new EdgeProperty(
+        SchedulingType.SEQUENTIAL, OutputDescriptor.create(
+            OrderedPartitionedKVOutput.class.getName()).setUserPayload(stage2Payload),
+        InputDescriptor.create(
+            OrderedGroupedInputLegacy.class.getName()).setUserPayload(stage2Payload)));
+    Edge edge2 = Edge.create(stage2Vertex, stage3Vertex, EdgeProperty.create(
         DataMovementType.SCATTER_GATHER, DataSourceType.PERSISTED,
-        SchedulingType.SEQUENTIAL, new OutputDescriptor(
-        OrderedPartitionedKVOutput.class.getName()).setUserPayload(stage3Payload), new InputDescriptor(
-                OrderedGroupedInputLegacy.class.getName()).setUserPayload(stage3Payload)));
+        SchedulingType.SEQUENTIAL, OutputDescriptor.create(
+            OrderedPartitionedKVOutput.class.getName()).setUserPayload(stage3Payload),
+        InputDescriptor.create(
+            OrderedGroupedInputLegacy.class.getName()).setUserPayload(stage3Payload)));
 
     dag.addEdge(edge1);
     dag.addEdge(edge2);
@@ -731,7 +734,7 @@ public class TestMRRJobsDAGApi {
       } else {
         tempTezconf.setBoolean(TezConfiguration.TEZ_AM_SESSION_MODE, true);
       }
-      tezSession = new TezClient("testsession", tempTezconf);
+      tezSession = TezClient.create("testsession", tempTezconf);
       tezSession.start();
     } else {
       tezSession = reUseTezSession;
@@ -782,7 +785,7 @@ public class TestMRRJobsDAGApi {
       LOG.info("Submitting dag to tez session with appId=" + tezSession.getAppMasterApplicationId()
           + " and Dag Name=" + dag.getName());
       if (additionalLocalResources != null) {
-        tezSession.addAppMasterLocalResources(additionalLocalResources);
+        tezSession.addAppMasterLocalFiles(additionalLocalResources);
       }
       dagClient = tezSession.submitDAG(dag);
       Assert.assertEquals(TezAppMasterStatus.RUNNING,

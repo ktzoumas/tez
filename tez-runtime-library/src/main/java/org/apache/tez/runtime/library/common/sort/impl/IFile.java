@@ -26,6 +26,7 @@ import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -36,7 +37,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.DataOutputBuffer;
-import org.apache.hadoop.io.BufferUtils;
+import org.apache.tez.runtime.library.utils.BufferUtils;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.WritableUtils;
 import org.apache.hadoop.io.compress.CodecPool;
@@ -110,7 +111,8 @@ public class IFile {
     final DataOutputBuffer previous = new DataOutputBuffer();
     Object prevKey = null;
     boolean headerWritten = false;
-    boolean firstKey = true;
+    @VisibleForTesting
+    boolean sameKey = false;
 
     final int RLE_MARKER_SIZE = WritableUtils.getVIntSize(RLE_MARKER);
     final int V_END_MARKER_SIZE = WritableUtils.getVIntSize(V_END_MARKER);
@@ -266,7 +268,7 @@ public class IFile {
           valueClass);
 
       int keyLength = 0;
-      boolean sameKey = (key == REPEAT_KEY);
+      sameKey = (key == REPEAT_KEY);
       if (!sameKey) {
         keySerializer.serialize(key);
         keyLength = buffer.getLength();
@@ -379,7 +381,7 @@ public class IFile {
       int valueLength = value.getLength() - value.getPosition();
       checkState(valueLength >= 0, NEGATIVE_VAL_LEN, valueLength, value);
 
-      boolean sameKey = (key == REPEAT_KEY);
+      sameKey = (key == REPEAT_KEY);
       if (!sameKey && rle) {
         sameKey = (keyLength != 0) && (BufferUtils.compare(previous, key) == 0);
       }
@@ -642,7 +644,7 @@ public class IFile {
     }
 
     /**
-     * Read upto len bytes into buf starting at offset off.
+     * Read up to len bytes into buf starting at offset off.
      *
      * @param buf buffer
      * @param off offset
@@ -687,7 +689,8 @@ public class IFile {
      * Reset key length and value length for next record in the file
      *
      * @param dIn
-     * @return
+     * @return true if key length and value length were set to the next
+     *         false if end of file (EOF) marker was reached
      * @throws IOException
      */
     protected boolean positionToNextRecord(DataInput dIn) throws IOException {
@@ -767,9 +770,9 @@ public class IFile {
 
     public static boolean isCompressedFlagEnabled(InputStream in) throws IOException {
       byte[] header = new byte[HEADER.length];
-      int bytesRead = in.read(header);
+      IOUtils.readFully(in, header, 0, HEADER.length);
 
-      if (bytesRead != HEADER.length || !(header[0] == 'T' && header[1] == 'I'
+      if (!(header[0] == 'T' && header[1] == 'I'
           && header[2] == 'F')) {
         throw new IOException("Not a valid ifile header");
       }

@@ -18,6 +18,7 @@
 
 package org.apache.tez.runtime.library.output;
 
+import com.google.protobuf.ByteString;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -56,8 +57,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
-import static junit.framework.Assert.assertEquals;
-import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
@@ -175,7 +176,8 @@ public class TestOnFileSortedOutput {
 
     ShuffleUserPayloads.DataMovementEventPayloadProto
         payload = ShuffleUserPayloads.DataMovementEventPayloadProto
-        .parseFrom(((CompositeDataMovementEvent) eventList.get(1)).getUserPayload());
+        .parseFrom(
+            ByteString.copyFrom(((CompositeDataMovementEvent) eventList.get(1)).getUserPayload()));
 
     assertEquals(HOST, payload.getHost());
     assertEquals(PORT, payload.getPort());
@@ -203,7 +205,7 @@ public class TestOnFileSortedOutput {
 
     ShuffleUserPayloads.DataMovementEventPayloadProto
         payload = ShuffleUserPayloads.DataMovementEventPayloadProto
-        .parseFrom(((CompositeDataMovementEvent) eventList.get(1)).getUserPayload());
+        .parseFrom(ByteString.copyFrom(((CompositeDataMovementEvent) eventList.get(1)).getUserPayload()));
 
     assertEquals(HOST, payload.getHost());
     assertEquals(PORT, payload.getPort());
@@ -220,7 +222,7 @@ public class TestOnFileSortedOutput {
 
     ShuffleUserPayloads.DataMovementEventPayloadProto
         payload = ShuffleUserPayloads.DataMovementEventPayloadProto
-        .parseFrom(((CompositeDataMovementEvent) eventList.get(1)).getUserPayload());
+        .parseFrom(ByteString.copyFrom(((CompositeDataMovementEvent) eventList.get(1)).getUserPayload()));
     if (sendEmptyPartitionViaEvent) {
       assertEquals("", payload.getHost());
       assertEquals(0, payload.getPort());

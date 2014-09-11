@@ -68,7 +68,7 @@ import org.apache.tez.mapreduce.examples.processor.FilterByWordOutputProcessor;
 import org.apache.tez.mapreduce.hadoop.MRInputHelpers;
 import org.apache.tez.mapreduce.input.MRInputLegacy;
 import org.apache.tez.mapreduce.output.MROutput;
-import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfig;
 
 public class FilterLinesByWordOneToOne extends Configured implements Tool {
 
@@ -146,7 +146,7 @@ public class FilterLinesByWordOneToOne extends Configured implements Tool {
 
 
 
-    TezClient tezSession = new TezClient("FilterLinesByWordSession", tezConf,
+    TezClient tezSession = TezClient.create("FilterLinesByWordSession", tezConf,
         commonLocalResources, null);
     tezSession.start(); // Why do I need to start the TezSession.
 
@@ -160,9 +160,9 @@ public class FilterLinesByWordOneToOne extends Configured implements Tool {
 
     UserPayload stage1Payload = TezUtils.createUserPayloadFromConf(stage1Conf);
     // Setup stage1 Vertex
-    Vertex stage1Vertex = new Vertex("stage1", new ProcessorDescriptor(
+    Vertex stage1Vertex = Vertex.create("stage1", ProcessorDescriptor.create(
         FilterByWordInputProcessor.class.getName()).setUserPayload(stage1Payload))
-        .setTaskLocalFiles(commonLocalResources);
+        .addTaskLocalFiles(commonLocalResources);
 
     DataSourceDescriptor dsd;
     if (generateSplitsInClient) {
@@ -171,29 +171,30 @@ public class FilterLinesByWordOneToOne extends Configured implements Tool {
       stage1Conf.setBoolean("mapred.mapper.new-api", false);
       dsd = MRInputHelpers.configureMRInputWithLegacySplitGeneration(stage1Conf, stagingDir, true);
     } else {
-      dsd = MRInputLegacy.createConfigurer(stage1Conf, TextInputFormat.class, inputPath)
-          .groupSplits(false).create();
+      dsd = MRInputLegacy.createConfigBuilder(stage1Conf, TextInputFormat.class, inputPath)
+          .groupSplits(false).build();
     }
     stage1Vertex.addDataSource("MRInput", dsd);
 
     // Setup stage2 Vertex
-    Vertex stage2Vertex = new Vertex("stage2", new ProcessorDescriptor(
+    Vertex stage2Vertex = Vertex.create("stage2", ProcessorDescriptor.create(
         FilterByWordOutputProcessor.class.getName()).setUserPayload(TezUtils
         .createUserPayloadFromConf(stage2Conf)), dsd.getNumberOfShards());
-    stage2Vertex.setTaskLocalFiles(commonLocalResources);
+    stage2Vertex.addTaskLocalFiles(commonLocalResources);
 
     // Configure the Output for stage2
     stage2Vertex.addDataSink(
         "MROutput",
-        new DataSinkDescriptor(new OutputDescriptor(MROutput.class.getName())
+        new DataSinkDescriptor(OutputDescriptor.create(MROutput.class.getName())
             .setUserPayload(TezUtils.createUserPayloadFromConf(stage2Conf)),
-            new OutputCommitterDescriptor(MROutputCommitter.class.getName()), null));
+            OutputCommitterDescriptor.create(MROutputCommitter.class.getName()), null));
 
-    UnorderedKVEdgeConfigurer edgeConf = UnorderedKVEdgeConfigurer
+    UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
         .newBuilder(Text.class.getName(), TextLongPair.class.getName()).build();
 
-    DAG dag = new DAG("FilterLinesByWord");
-    Edge edge = new Edge(stage1Vertex, stage2Vertex, edgeConf.createDefaultOneToOneEdgeProperty());
+    DAG dag = DAG.create("FilterLinesByWord");
+    Edge edge =
+        Edge.create(stage1Vertex, stage2Vertex, edgeConf.createDefaultOneToOneEdgeProperty());
     dag.addVertex(stage1Vertex).addVertex(stage2Vertex).addEdge(edge);
 
     LOG.info("Submitting DAG to Tez Session");

@@ -91,7 +91,7 @@ public class TezUtils {
    * @throws java.io.IOException
    */
   public static UserPayload createUserPayloadFromConf(Configuration conf) throws IOException {
-    return new UserPayload(createByteStringFromConf(conf).toByteArray());
+    return UserPayload.create(createByteStringFromConf(conf).asReadOnlyByteBuffer());
   }
 
   /**

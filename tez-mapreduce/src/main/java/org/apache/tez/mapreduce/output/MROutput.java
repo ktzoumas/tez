@@ -43,7 +43,6 @@ import org.apache.hadoop.mapreduce.OutputCommitter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.tez.client.TezClientUtils;
 import org.apache.tez.common.TezUtils;
 import org.apache.tez.common.counters.TaskCounter;
@@ -82,7 +81,7 @@ public class MROutput extends AbstractLogicalOutput {
    * Helper class to configure {@link MROutput}
    *
    */
-  public static class MROutputConfigurer {
+  public static class MROutputConfigBuilder {
     final Configuration conf;
     final Class<?> outputFormat;
     final boolean outputFormatProvided;
@@ -92,40 +91,48 @@ public class MROutput extends AbstractLogicalOutput {
     String outputPath;
     boolean doCommit = true;
     
-    private MROutputConfigurer(Configuration conf, Class<?> outputFormat) {
+    private MROutputConfigBuilder(Configuration conf, Class<?> outputFormatParam) {
       this.conf = conf;
-      if (outputFormat != null) {
+      if (outputFormatParam != null) {
         outputFormatProvided = true;
-        this.outputFormat = outputFormat;
-        if (org.apache.hadoop.mapred.OutputFormat.class.isAssignableFrom(outputFormat)) {
+        this.outputFormat = outputFormatParam;
+        if (org.apache.hadoop.mapred.OutputFormat.class.isAssignableFrom(outputFormatParam)) {
           useNewApi = false;
-        } else if (org.apache.hadoop.mapreduce.OutputFormat.class.isAssignableFrom(outputFormat)) {
+        } else if (org.apache.hadoop.mapreduce.OutputFormat.class.isAssignableFrom(outputFormatParam)) {
           useNewApi = true;
         } else {
           throw new TezUncheckedException("outputFormat must be assignable from either " +
               "org.apache.hadoop.mapred.OutputFormat or " +
               "org.apache.hadoop.mapreduce.OutputFormat" +
-              " Given: " + outputFormat.getName());
+              " Given: " + outputFormatParam.getName());
         }
       } else {
         outputFormatProvided = false;
-        useNewApi = conf.getBoolean("mapred.mapper.new-api", true);
-        if (useNewApi) {
-          this.outputFormat = ReflectionUtils.getClass(conf.get(MRJobConfig.OUTPUT_FORMAT_CLASS_ATTR));
-        } else {
-          this.outputFormat = ReflectionUtils.getClass(conf.get("mapred.output.format.class"));
+        useNewApi = conf.getBoolean(MRJobConfig.NEW_API_REDUCER_CONFIG, true);
+        try {
+          if (useNewApi) {
+            this.outputFormat = conf.getClassByName(conf.get(MRJobConfig.OUTPUT_FORMAT_CLASS_ATTR));
+            Preconditions.checkState(org.apache.hadoop.mapreduce.OutputFormat.class
+                .isAssignableFrom(this.outputFormat));
+          } else {
+            this.outputFormat = conf.getClassByName(conf.get("mapred.output.format.class"));
+            Preconditions.checkState(org.apache.hadoop.mapred.OutputFormat.class
+                .isAssignableFrom(this.outputFormat));
+          }
+        } catch (ClassNotFoundException e) {
+          throw new TezUncheckedException(e);
         }
         initializeOutputPath();
       }
     }
 
-    private MROutputConfigurer setOutputPath(String outputPath) {
+    private MROutputConfigBuilder setOutputPath(String outputPath) {
       if (!(org.apache.hadoop.mapreduce.lib.output.FileOutputFormat.class.isAssignableFrom(outputFormat) || 
           FileOutputFormat.class.isAssignableFrom(outputFormat))) {
         throw new TezUncheckedException("When setting outputPath the outputFormat must " + 
             "be assignable from either org.apache.hadoop.mapred.FileOutputFormat or " +
             "org.apache.hadoop.mapreduce.lib.output.FileOutputFormat. " +
-            "Otherwise use the non-path configurer." + 
+            "Otherwise use the non-path config builder." +
             " Given: " + outputFormat.getName());
       }
       conf.set(org.apache.hadoop.mapreduce.lib.output.FileOutputFormat.OUTDIR, outputPath);
@@ -146,7 +153,7 @@ public class MROutput extends AbstractLogicalOutput {
      * Create the {@link DataSinkDescriptor}
      * @return {@link DataSinkDescriptor}
      */
-    public DataSinkDescriptor create() {
+    public DataSinkDescriptor build() {
       if (org.apache.hadoop.mapreduce.lib.output.FileOutputFormat.class
           .isAssignableFrom(outputFormat) ||
           FileOutputFormat.class.isAssignableFrom(outputFormat)) {
@@ -173,8 +180,8 @@ public class MROutput extends AbstractLogicalOutput {
       }
 
       return new DataSinkDescriptor(
-          new OutputDescriptor(outputClassName).setUserPayload(createUserPayload()),
-          (doCommit ? new OutputCommitterDescriptor(
+          OutputDescriptor.create(outputClassName).setUserPayload(createUserPayload()),
+          (doCommit ? OutputCommitterDescriptor.create(
               MROutputCommitter.class.getName()) : null), credentials);
     }
     
@@ -183,9 +190,9 @@ public class MROutput extends AbstractLogicalOutput {
      * Use the method to turn this off when not using a {@link FileSystem}
      * or when {@link Credentials} are not supported
      * @param value whether to get credentials or not. (true by default)
-     * @return {@link MROutputConfigurer}
+     * @return {@link org.apache.tez.mapreduce.output.MROutput.MROutputConfigBuilder}
      */
-    public MROutputConfigurer getCredentialsForSinkFileSystem(boolean value) {
+    public MROutputConfigBuilder getCredentialsForSinkFileSystem(boolean value) {
       getCredentialsForSinkFilesystem = value;
       return this;
     }
@@ -195,12 +202,12 @@ public class MROutput extends AbstractLogicalOutput {
      * If the value is set to false then no {@link org.apache.tez.runtime.api.OutputCommitter} will
      * be specified for the output
      */
-    public MROutputConfigurer setDoCommit(boolean value) {
+    public MROutputConfigBuilder setDoCommit(boolean value) {
       doCommit = value;
       return this;
     }
 
-    MROutputConfigurer setOutputClassName(String outputClassName) {
+    MROutputConfigBuilder setOutputClassName(String outputClassName) {
       this.outputClassName = outputClassName;
       return this;
     }
@@ -210,7 +217,7 @@ public class MROutput extends AbstractLogicalOutput {
      */
     private UserPayload createUserPayload() {
       if (outputFormatProvided) {
-        conf.setBoolean("mapred.reducer.new-api", useNewApi);
+        conf.setBoolean(MRJobConfig.NEW_API_REDUCER_CONFIG, useNewApi);
         if (useNewApi) {
           conf.set(MRJobConfig.OUTPUT_FORMAT_CLASS_ATTR, outputFormat.getName());
         } else {
@@ -227,7 +234,7 @@ public class MROutput extends AbstractLogicalOutput {
   }
 
   /**
-   * Create an {@link MROutputConfigurer} </p>
+   * Create an {@link org.apache.tez.mapreduce.output.MROutput.MROutputConfigBuilder} </p>
    * <p/>
    * The preferred usage model is to provide all of the parameters, and use methods to configure
    * the Output.
@@ -239,14 +246,15 @@ public class MROutput extends AbstractLogicalOutput {
    *                     modified in place
    * @param outputFormat OutputFormat derived class. If the OutputFormat specified is
    *                     null, the provided configuration should be complete.
-   * @return {@link MROutputConfigurer}
+   * @return {@link org.apache.tez.mapreduce.output.MROutput.MROutputConfigBuilder}
    */
-  public static MROutputConfigurer createConfigurer(Configuration conf, @Nullable Class<?> outputFormat) {
-    return new MROutputConfigurer(conf, outputFormat);
+  public static MROutputConfigBuilder createConfigBuilder(Configuration conf,
+                                                          @Nullable Class<?> outputFormat) {
+    return new MROutputConfigBuilder(conf, outputFormat);
   }
 
   /**
-   * Create an {@link MROutputConfigurer} for a {@link org.apache.hadoop.mapreduce.lib.output.FileOutputFormat}
+   * Create an {@link org.apache.tez.mapreduce.output.MROutput.MROutputConfigBuilder} for a {@link org.apache.hadoop.mapreduce.lib.output.FileOutputFormat}
    * or {@link org.apache.hadoop.mapred.FileOutputFormat} based OutputFormats.
    * <p/>
    * The preferred usage model is to provide all of the parameters, and use methods to configure the
@@ -260,11 +268,12 @@ public class MROutput extends AbstractLogicalOutput {
    * @param outputFormat FileInputFormat derived class. If the InputFormat specified is
    *                     null, the provided configuration should be complete.
    * @param outputPath   Output path. This can be null if already setup in the configuration
-   * @return {@link MROutputConfigurer}
+   * @return {@link org.apache.tez.mapreduce.output.MROutput.MROutputConfigBuilder}
    */
-  public static MROutputConfigurer createConfigurer(Configuration conf, @Nullable Class<?> outputFormat,
-      @Nullable String outputPath) {
-    MROutputConfigurer configurer = new MROutputConfigurer(conf, outputFormat);
+  public static MROutputConfigBuilder createConfigBuilder(Configuration conf,
+                                                          @Nullable Class<?> outputFormat,
+                                                          @Nullable String outputPath) {
+    MROutputConfigBuilder configurer = new MROutputConfigBuilder(conf, outputFormat);
     if (outputPath != null) {
       configurer.setOutputPath(outputPath);
     }
@@ -344,7 +353,7 @@ public class MROutput extends AbstractLogicalOutput {
       newApiTaskAttemptContext = createTaskAttemptContext(taskAttemptId);
       try {
         newOutputFormat =
-            ReflectionUtils.newInstance(
+            org.apache.hadoop.util.ReflectionUtils.newInstance(
                 newApiTaskAttemptContext.getOutputFormatClass(), jobConf);
       } catch (ClassNotFoundException cnfe) {
         throw new IOException(cnfe);

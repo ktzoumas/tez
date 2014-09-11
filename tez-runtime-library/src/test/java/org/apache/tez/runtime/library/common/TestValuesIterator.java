@@ -3,6 +3,7 @@ package org.apache.tez.runtime.library.common;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.TreeMultimap;
 
+import java.nio.ByteBuffer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -56,8 +57,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.TreeMap;
 
-import static junit.framework.TestCase.assertFalse;
-import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
@@ -130,7 +131,7 @@ public class TestValuesIterator {
     this.correctComparator =
         (correctComparator == null) ? this.comparator : getComparator(correctComparator);
     this.expectedTestResult = testResult;
-    sortedDataMap = TreeMultimap.create(this.correctComparator, Ordering.natural());
+    sortedDataMap = TreeMultimap.create(this.correctComparator, (java.util.Comparator) Ordering.natural());
     setupConf(serializationClassName);
   }
 
@@ -381,7 +382,7 @@ public class TestValuesIterator {
     doReturn(1).when(inputContext).getInputIndex();
     doReturn("srcVertex").when(inputContext).getSourceVertexName();
     doReturn(1).when(inputContext).getTaskVertexIndex();
-    doReturn(new UserPayload(new byte[1024])).when(inputContext).getUserPayload();
+    doReturn(UserPayload.create(ByteBuffer.wrap(new byte[1024]))).when(inputContext).getUserPayload();
     return inputContext;
   }
 

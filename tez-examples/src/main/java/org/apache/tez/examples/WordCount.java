@@ -26,6 +26,7 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
@@ -46,7 +47,7 @@ import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.KeyValuesReader;
-import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfig;
 
 import com.google.common.base.Preconditions;
 
@@ -59,6 +60,11 @@ import org.apache.tez.runtime.library.processor.SimpleProcessor;
  * of occurrences of a word in a distributed text data set.
  */
 public class WordCount extends Configured implements Tool {
+
+  static String INPUT = "Input";
+  static String OUTPUT = "Output";
+  static String TOKENIZER = "Tokenizer";
+  static String SUMMATION = "Summation";
   
   /*
    * Example code to write a processor in Tez.
@@ -84,8 +90,9 @@ public class WordCount extends Configured implements Tool {
       // of casting the input/output. This allows the actual input/output type to be replaced
       // without affecting the semantic guarantees of the data type that are represented by
       // the reader and writer.
-      KeyValueReader kvReader = (KeyValueReader) getInputs().values().iterator().next().getReader();
-      KeyValueWriter kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
+      // The inputs/outputs are referenced via the names assigned in the DAG.
+      KeyValueReader kvReader = (KeyValueReader) getInputs().get(INPUT).getReader();
+      KeyValueWriter kvWriter = (KeyValueWriter) getOutputs().get(SUMMATION).getWriter();
       while (kvReader.next()) {
         StringTokenizer itr = new StringTokenizer(kvReader.getCurrentValue().toString());
         while (itr.hasMoreTokens()) {
@@ -116,11 +123,11 @@ public class WordCount extends Configured implements Tool {
     public void run() throws Exception {
       Preconditions.checkArgument(getInputs().size() == 1);
       Preconditions.checkArgument(getOutputs().size() == 1);
-      KeyValueWriter kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
+      KeyValueWriter kvWriter = (KeyValueWriter) getOutputs().get(OUTPUT).getWriter();
       // The KeyValues reader provides all values for a given key. The aggregation of values per key
       // is done by the LogicalInput. Since the key is the word and the values are its counts in 
       // the different TokenProcessors, summing all values per key provides the sum for that word.
-      KeyValuesReader kvReader = (KeyValuesReader) getInputs().values().iterator().next().getReader();
+      KeyValuesReader kvReader = (KeyValuesReader) getInputs().get(TOKENIZER).getReader();
       while (kvReader.next()) {
         Text word = (Text) kvReader.getCurrentKey();
         int sum = 0;
@@ -139,32 +146,32 @@ public class WordCount extends Configured implements Tool {
 
     // Create the descriptor that describes the input data to Tez. Using MRInput to read text 
     // data from the given input path. The TextInputFormat is used to read the text data.
-    DataSourceDescriptor dataSource = MRInput.createConfigurer(new Configuration(tezConf),
-        TextInputFormat.class, inputPath).create();
+    DataSourceDescriptor dataSource = MRInput.createConfigBuilder(new Configuration(tezConf),
+        TextInputFormat.class, inputPath).build();
 
     // Create a descriptor that describes the output data to Tez. Using MROoutput to write text
     // data to the given output path. The TextOutputFormat is used to write the text data.
-    DataSinkDescriptor dataSink = MROutput.createConfigurer(new Configuration(tezConf),
-        TextOutputFormat.class, outputPath).create();
+    DataSinkDescriptor dataSink = MROutput.createConfigBuilder(new Configuration(tezConf),
+        TextOutputFormat.class, outputPath).build();
 
     // Create a vertex that reads the data from the data source and tokenizes it using the 
     // TokenProcessor. The number of tasks that will do the work for this vertex will be decided 
     // using the information provided by the data source descriptor.
-    Vertex tokenizerVertex = new Vertex("Tokenizer", new ProcessorDescriptor(
-        TokenProcessor.class.getName())).addDataSource("Input", dataSource);
+    Vertex tokenizerVertex = Vertex.create(TOKENIZER, ProcessorDescriptor.create(
+        TokenProcessor.class.getName())).addDataSource(INPUT, dataSource);
 
     // Create the edge that represents the movement and semantics of data between the producer 
     // Tokenizer vertex and the consumer Summation vertex. In order to perform the summation in 
     // parallel the tokenized data will be partitioned by word such that a given word goes to the 
     // same partition. The counts for the words should be grouped together per word. To achieve this
     // we can use an edge that contains an input/output pair that handles partitioning and grouping 
-    // of key value data. We use the helper OrderedPartitionedKVEdgeConfigurer to create such an 
+    // of key value data. We use the helper OrderedPartitionedKVEdgeConfig to create such an
     // edge. Internally, it sets up matching Tez inputs and outputs that can perform this logic.
     // We specify the key, value and partitioner type. Here the key type is Text (for word), the 
     // value type is IntWritable (for count) and we using a hash based partitioner. This is a helper
     // object. The edge can be configured by configuring the input, output etc individually without
     // using this helper.
-    OrderedPartitionedKVEdgeConfigurer edgeConf = OrderedPartitionedKVEdgeConfigurer
+    OrderedPartitionedKVEdgeConfig edgeConf = OrderedPartitionedKVEdgeConfig
         .newBuilder(Text.class.getName(), IntWritable.class.getName(),
             HashPartitioner.class.getName()).build();
 
@@ -172,19 +179,19 @@ public class WordCount extends Configured implements Tool {
     // The number of tasks that do the work of this vertex depends on the number of partitions used 
     // to distribute the sum processing. In this case, its been made configurable via the 
     // numPartitions parameter.
-    Vertex summationVertex = new Vertex("Summation",
-        new ProcessorDescriptor(SumProcessor.class.getName()), numPartitions)
-        .addDataSink("Output", dataSink);
+    Vertex summationVertex = Vertex.create(SUMMATION,
+        ProcessorDescriptor.create(SumProcessor.class.getName()), numPartitions)
+        .addDataSink(OUTPUT, dataSink);
 
     // No need to add jar containing this class as assumed to be part of the Tez jars. Otherwise 
     // we would have to add the jars for this code as local files to the vertices.
     
     // Create DAG and add the vertices. Connect the producer and consumer vertices via the edge
-    DAG dag = new DAG("WordCount");
+    DAG dag = DAG.create("WordCount");
     dag.addVertex(tokenizerVertex)
         .addVertex(summationVertex)
         .addEdge(
-            new Edge(tokenizerVertex, summationVertex, edgeConf.createDefaultEdgeProperty()));
+            Edge.create(tokenizerVertex, summationVertex, edgeConf.createDefaultEdgeProperty()));
     return dag;  
   }
 
@@ -202,10 +209,12 @@ public class WordCount extends Configured implements Tool {
     } else {
       tezConf = new TezConfiguration();
     }
+    
+    UserGroupInformation.setConfiguration(tezConf);
 
     // Create the TezClient to submit the DAG. Pass the tezConf that has all necessary global and 
     // dag specific configurations
-    TezClient tezClient = new TezClient("WordCount", tezConf);
+    TezClient tezClient = TezClient.create("WordCount", tezConf);
     // TezClient must be started before it can be used
     tezClient.start();
 

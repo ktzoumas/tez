@@ -18,6 +18,8 @@
 
 package org.apache.tez.runtime.api.events;
 
+import java.nio.ByteBuffer;
+
 import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.tez.runtime.api.Event;
@@ -41,25 +43,29 @@ public class VertexManagerEvent extends Event {
   /**
    * User payload to be sent
    */
-  private final byte[] userPayload;
-  
-  /**
-   * Create a new VertexManagerEvent
-   * @param vertexName
-   * @param userPayload This should not be modified since a reference is kept
-   */
-  public VertexManagerEvent(String vertexName, byte[] userPayload) {
+  private final ByteBuffer userPayload;
+
+  private VertexManagerEvent(String vertexName, ByteBuffer userPayload) {
     Preconditions.checkArgument(vertexName != null);
     Preconditions.checkArgument(userPayload != null);
     this.targetVertexName = vertexName;
     this.userPayload = userPayload;
   }
-  
+
+  /**
+   * Create a new VertexManagerEvent
+   * @param vertexName
+   * @param userPayload This should not be modified since a reference is kept
+   */
+  public static VertexManagerEvent create(String vertexName, ByteBuffer userPayload) {
+    return new VertexManagerEvent(vertexName, userPayload);
+  }
+
   public String getTargetVertexName() {
     return targetVertexName;
   }
   
-  public byte[] getUserPayload() {
-    return userPayload;
+  public ByteBuffer getUserPayload() {
+    return userPayload == null ? null : userPayload.asReadOnlyBuffer();
   }
 }

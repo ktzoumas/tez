@@ -50,11 +50,10 @@ public class TestShuffleInputEventHandlerImpl {
   public void testSimple() throws IOException {
     InputContext inputContext = mock(InputContext.class);
     ShuffleManager shuffleManager = mock(ShuffleManager.class);
-    Configuration conf = mock(Configuration.class);
     FetchedInputAllocator inputAllocator = mock(FetchedInputAllocator.class);
 
     ShuffleInputEventHandlerImpl handler = new ShuffleInputEventHandlerImpl(inputContext,
-        shuffleManager, inputAllocator, null, false, 0, conf);
+        shuffleManager, inputAllocator, null, false, 0);
 
     int taskIndex = 1;
     Event dme = createDataMovementEvent(0, taskIndex, null);
@@ -73,11 +72,10 @@ public class TestShuffleInputEventHandlerImpl {
   public void testCurrentPartitionEmpty() throws IOException {
     InputContext inputContext = mock(InputContext.class);
     ShuffleManager shuffleManager = mock(ShuffleManager.class);
-    Configuration conf = mock(Configuration.class);
     FetchedInputAllocator inputAllocator = mock(FetchedInputAllocator.class);
 
     ShuffleInputEventHandlerImpl handler = new ShuffleInputEventHandlerImpl(inputContext,
-        shuffleManager, inputAllocator, null, false, 0, conf);
+        shuffleManager, inputAllocator, null, false, 0);
 
     int taskIndex = 1;
     Event dme = createDataMovementEvent(0, taskIndex, createEmptyPartitionByteString(0));
@@ -95,11 +93,10 @@ public class TestShuffleInputEventHandlerImpl {
   public void testOtherPartitionEmpty() throws IOException {
     InputContext inputContext = mock(InputContext.class);
     ShuffleManager shuffleManager = mock(ShuffleManager.class);
-    Configuration conf = mock(Configuration.class);
     FetchedInputAllocator inputAllocator = mock(FetchedInputAllocator.class);
 
     ShuffleInputEventHandlerImpl handler = new ShuffleInputEventHandlerImpl(inputContext,
-        shuffleManager, inputAllocator, null, false, 0, conf);
+        shuffleManager, inputAllocator, null, false, 0);
 
     int taskIndex = 1;
     Event dme = createDataMovementEvent(0, taskIndex, createEmptyPartitionByteString(1));
@@ -116,11 +113,10 @@ public class TestShuffleInputEventHandlerImpl {
   public void testMultipleEvents1() throws IOException {
     InputContext inputContext = mock(InputContext.class);
     ShuffleManager shuffleManager = mock(ShuffleManager.class);
-    Configuration conf = mock(Configuration.class);
     FetchedInputAllocator inputAllocator = mock(FetchedInputAllocator.class);
 
     ShuffleInputEventHandlerImpl handler = new ShuffleInputEventHandlerImpl(inputContext,
-        shuffleManager, inputAllocator, null, false, 0, conf);
+        shuffleManager, inputAllocator, null, false, 0);
 
     int taskIndex1 = 1;
     Event dme1 = createDataMovementEvent(0, taskIndex1, createEmptyPartitionByteString(0));
@@ -148,7 +144,8 @@ public class TestShuffleInputEventHandlerImpl {
     if (emptyPartitionByteString != null) {
       builder.setEmptyPartitions(emptyPartitionByteString);
     }
-    Event dme = new DataMovementEvent(srcIndex, targetIndex, 0, builder.build().toByteArray());
+    Event dme = DataMovementEvent
+        .create(srcIndex, targetIndex, 0, builder.build().toByteString().asReadOnlyByteBuffer());
     return dme;
   }
 

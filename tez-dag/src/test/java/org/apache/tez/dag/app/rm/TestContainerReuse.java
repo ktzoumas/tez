@@ -57,7 +57,7 @@ import org.apache.tez.dag.api.InputDescriptor;
 import org.apache.tez.dag.api.OutputDescriptor;
 import org.apache.tez.dag.api.ProcessorDescriptor;
 import org.apache.tez.dag.api.TezConfiguration;
-import org.apache.tez.dag.api.VertexLocationHint.TaskLocationHint;
+import org.apache.tez.dag.api.TaskLocationHint;
 import org.apache.tez.dag.api.oldrecords.TaskAttemptState;
 import org.apache.tez.dag.app.AppContext;
 import org.apache.tez.dag.app.ClusterInfo;
@@ -1105,15 +1105,15 @@ public class TestContainerReuse {
     if (hosts != null || racks != null) {
       Set<String> hostsSet = Sets.newHashSet(hosts);
       Set<String> racksSet = Sets.newHashSet(racks);
-      locationHint = new TaskLocationHint(hostsSet, racksSet);
+      locationHint = TaskLocationHint.createTaskLocationHint(hostsSet, racksSet);
     }
     AMSchedulerEventTALaunchRequest lr = new AMSchedulerEventTALaunchRequest(
-      taID, capability, new TaskSpec(taID, "dagName", "vertexName",
-      new ProcessorDescriptor("processorClassName"),
+      taID, capability, new TaskSpec(taID, "dagName", "vertexName", -1,
+        ProcessorDescriptor.create("processorClassName"),
       Collections.singletonList(new InputSpec("vertexName",
-        new InputDescriptor("inputClassName"), 1)),
+          InputDescriptor.create("inputClassName"), 1)),
       Collections.singletonList(new OutputSpec("vertexName",
-        new OutputDescriptor("outputClassName"), 1)), null), ta, locationHint,
+          OutputDescriptor.create("outputClassName"), 1)), null), ta, locationHint,
       priority, containerContext);
     return lr;
   }

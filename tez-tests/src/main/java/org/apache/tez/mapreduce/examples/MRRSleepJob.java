@@ -82,7 +82,7 @@ import org.apache.tez.mapreduce.input.MRInputLegacy;
 import org.apache.tez.mapreduce.output.MROutputLegacy;
 import org.apache.tez.mapreduce.processor.map.MapProcessor;
 import org.apache.tez.mapreduce.processor.reduce.ReduceProcessor;
-import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfig;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -490,11 +490,11 @@ public class MRRSleepJob extends Configured implements Tool {
       dataSource = MRInputHelpers
           .configureMRInputWithLegacySplitGeneration(mapStageConf, remoteStagingDir, true);
     } else {
-      dataSource = MRInputLegacy.createConfigurer(mapStageConf, SleepInputFormat.class)
-          .generateSplitsInAM(generateSplitsInAM).create();
+      dataSource = MRInputLegacy.createConfigBuilder(mapStageConf, SleepInputFormat.class)
+          .generateSplitsInAM(generateSplitsInAM).build();
     }
 
-    DAG dag = new DAG("MRRSleepJob");
+    DAG dag = DAG.create("MRRSleepJob");
     String jarPath = ClassUtil.findContainingJar(getClass());
     if (jarPath == null)  {
         throw new TezUncheckedException("Could not find any jar containing"
@@ -524,9 +524,9 @@ public class MRRSleepJob extends Configured implements Tool {
     UserPayload mapUserPayload = TezUtils.createUserPayloadFromConf(mapStageConf);
     int numTasks = generateSplitsInAM ? -1 : numMapper;
 
-    Vertex mapVertex = new Vertex("map", new ProcessorDescriptor(
+    Vertex mapVertex = Vertex.create("map", ProcessorDescriptor.create(
         MapProcessor.class.getName()).setUserPayload(mapUserPayload), numTasks)
-        .setTaskLocalFiles(commonLocalResources);
+        .addTaskLocalFiles(commonLocalResources);
     mapVertex.addDataSource("MRInput", dataSource);
     vertices.add(mapVertex);
 
@@ -536,10 +536,10 @@ public class MRRSleepJob extends Configured implements Tool {
         Configuration iconf =
             intermediateReduceStageConfs[i];
         UserPayload iReduceUserPayload = TezUtils.createUserPayloadFromConf(iconf);
-        Vertex ivertex = new Vertex("ireduce" + (i+1),
-                new ProcessorDescriptor(ReduceProcessor.class.getName()).
+        Vertex ivertex = Vertex.create("ireduce" + (i + 1),
+            ProcessorDescriptor.create(ReduceProcessor.class.getName()).
                 setUserPayload(iReduceUserPayload), numIReducer);
-        ivertex.setTaskLocalFiles(commonLocalResources);
+        ivertex.addTaskLocalFiles(commonLocalResources);
         vertices.add(ivertex);
       }
     }
@@ -547,22 +547,22 @@ public class MRRSleepJob extends Configured implements Tool {
     Vertex finalReduceVertex = null;
     if (numReducer > 0) {
       UserPayload reducePayload = TezUtils.createUserPayloadFromConf(finalReduceConf);
-      finalReduceVertex = new Vertex("reduce", new ProcessorDescriptor(
+      finalReduceVertex = Vertex.create("reduce", ProcessorDescriptor.create(
           ReduceProcessor.class.getName()).setUserPayload(reducePayload), numReducer);
-      finalReduceVertex.setTaskLocalFiles(commonLocalResources);
-      finalReduceVertex.addDataSink("MROutput", MROutputLegacy.createConfigurer(finalReduceConf,
-          NullOutputFormat.class).create());
+      finalReduceVertex.addTaskLocalFiles(commonLocalResources);
+      finalReduceVertex.addDataSink("MROutput", MROutputLegacy.createConfigBuilder(finalReduceConf,
+          NullOutputFormat.class).build());
       vertices.add(finalReduceVertex);
     } else {
       // Map only job
       mapVertex.addDataSink("MROutput",
-          MROutputLegacy.createConfigurer(mapStageConf, NullOutputFormat.class).create());
+          MROutputLegacy.createConfigBuilder(mapStageConf, NullOutputFormat.class).build());
     }
 
 
     Map<String, String> partitionerConf = Maps.newHashMap();
     partitionerConf.put(MRJobConfig.PARTITIONER_CLASS_ATTR, MRRSleepJobPartitioner.class.getName());
-    OrderedPartitionedKVEdgeConfigurer edgeConf = OrderedPartitionedKVEdgeConfigurer
+    OrderedPartitionedKVEdgeConfig edgeConf = OrderedPartitionedKVEdgeConfig
         .newBuilder(IntWritable.class.getName(), IntWritable.class.getName(),
             HashPartitioner.class.getName(), partitionerConf).configureInput().useLegacyInput()
         .done().build();
@@ -571,7 +571,7 @@ public class MRRSleepJob extends Configured implements Tool {
       dag.addVertex(vertices.get(i));
       if (i != 0) {
         dag.addEdge(
-            new Edge(vertices.get(i - 1), vertices.get(i), edgeConf.createDefaultEdgeProperty()));
+            Edge.create(vertices.get(i - 1), vertices.get(i), edgeConf.createDefaultEdgeProperty()));
       }
     }
 
@@ -733,22 +733,10 @@ public class MRRSleepJob extends Configured implements Tool {
         mapSleepTime, mapSleepCount, reduceSleepTime, reduceSleepCount,
         iReduceSleepTime, iReduceSleepCount, writeSplitsToDfs, generateSplitsInAM);
 
-    TezClient tezSession = new TezClient("MRRSleep", conf, false, null, credentials);
+    TezClient tezSession = TezClient.create("MRRSleep", conf, false, null, credentials);
     tezSession.start();
     DAGClient dagClient = tezSession.submitDAG(dag);
-
-    while (true) {
-      DAGStatus status = dagClient.getDAGStatus(null);
-      LOG.info("DAG Status: " + status);
-      if (status.isCompleted()) {
-        break;
-      }
-      try {
-        Thread.sleep(1000);
-      } catch (InterruptedException e) {
-        // do nothing
-      }
-    }
+    dagClient.waitForCompletion();
     tezSession.stop();
 
     return dagClient.getDAGStatus(null).getState().equals(DAGStatus.State.SUCCEEDED) ? 0 : 1;

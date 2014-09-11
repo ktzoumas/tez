@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.google.protobuf.ByteString;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -122,7 +123,7 @@ public class TestOnFileUnorderedKVOutput {
 
     OutputContext outputContext = new TezOutputContextImpl(conf, new String[] {workDir.toString()},
         appAttemptNumber, tezUmbilical, dagName, taskVertexName, destinationVertexName,
-        taskAttemptID, counters, 0, userPayload, runtimeTask,
+        -1, taskAttemptID, counters, 0, userPayload, runtimeTask,
         null, auxEnv, new MemoryDistributor(1, 1, conf) , outputDescriptor, null);
 
     UnorderedKVOutput kvOutput = new OnFileUnorderedKVOutputForTest(outputContext, 1);
@@ -145,7 +146,7 @@ public class TestOnFileUnorderedKVOutput {
     assertEquals("Invalid source index", 0, dmEvent.getSourceIndex());
 
     DataMovementEventPayloadProto shufflePayload = DataMovementEventPayloadProto
-        .parseFrom(dmEvent.getUserPayload());
+        .parseFrom(ByteString.copyFrom(dmEvent.getUserPayload()));
 
     assertFalse(shufflePayload.hasEmptyPartitions());
     assertEquals(outputContext.getUniqueIdentifier(), shufflePayload.getPathComponent());

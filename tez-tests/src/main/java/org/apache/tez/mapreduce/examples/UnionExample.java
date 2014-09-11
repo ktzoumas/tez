@@ -32,6 +32,8 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.FileAlreadyExistsException;
 import org.apache.hadoop.mapred.TextInputFormat;
 import org.apache.hadoop.mapred.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.records.LocalResource;
 import org.apache.tez.client.TezClient;
@@ -50,7 +52,6 @@ import org.apache.tez.dag.api.client.DAGClient;
 import org.apache.tez.dag.api.client.DAGStatus;
 import org.apache.tez.dag.api.client.StatusGetOpts;
 import org.apache.tez.mapreduce.input.MRInput;
-import org.apache.tez.mapreduce.input.MRInput.MRInputConfigurer;
 import org.apache.tez.mapreduce.output.MROutput;
 import org.apache.tez.mapreduce.processor.SimpleMRProcessor;
 import org.apache.tez.runtime.api.LogicalInput;
@@ -59,7 +60,7 @@ import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.KeyValuesReader;
-import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.OrderedPartitionedKVEdgeConfig;
 import org.apache.tez.runtime.library.input.ConcatenatedMergedKeyValuesInput;
 import org.apache.tez.runtime.library.partitioner.HashPartitioner;
 
@@ -165,44 +166,48 @@ public class UnionExample {
   private DAG createDAG(FileSystem fs, TezConfiguration tezConf,
       Map<String, LocalResource> localResources, Path stagingDir,
       String inputPath, String outputPath) throws IOException {
-    DAG dag = new DAG("UnionExample");
+    DAG dag = DAG.create("UnionExample");
     
     int numMaps = -1;
     Configuration inputConf = new Configuration(tezConf);
-    MRInputConfigurer configurer = MRInput.createConfigurer(inputConf, TextInputFormat.class,
-        inputPath);
-    DataSourceDescriptor dataSource = configurer.generateSplitsInAM(false).create();
+    inputConf.setBoolean("mapred.mapper.new-api", false);
+    inputConf.set("mapred.input.format.class", TextInputFormat.class.getName());
+    inputConf.set(FileInputFormat.INPUT_DIR, inputPath);
+    MRInput.MRInputConfigBuilder configurer = MRInput.createConfigBuilder(inputConf, null);
+    DataSourceDescriptor dataSource = configurer.generateSplitsInAM(false).build();
 
-    Vertex mapVertex1 = new Vertex("map1", new ProcessorDescriptor(
+    Vertex mapVertex1 = Vertex.create("map1", ProcessorDescriptor.create(
         TokenProcessor.class.getName()), numMaps).addDataSource("MRInput", dataSource);
 
-    Vertex mapVertex2 = new Vertex("map2", new ProcessorDescriptor(
+    Vertex mapVertex2 = Vertex.create("map2", ProcessorDescriptor.create(
         TokenProcessor.class.getName()), numMaps).addDataSource("MRInput", dataSource);
 
-    Vertex mapVertex3 = new Vertex("map3", new ProcessorDescriptor(
+    Vertex mapVertex3 = Vertex.create("map3", ProcessorDescriptor.create(
         TokenProcessor.class.getName()), numMaps).addDataSource("MRInput", dataSource);
 
-    Vertex checkerVertex = new Vertex("checker", new ProcessorDescriptor(
+    Vertex checkerVertex = Vertex.create("checker", ProcessorDescriptor.create(
         UnionProcessor.class.getName()), 1);
 
     Configuration outputConf = new Configuration(tezConf);
-    DataSinkDescriptor od = MROutput.createConfigurer(outputConf,
-        TextOutputFormat.class, outputPath).create();
+    outputConf.setBoolean("mapred.reducer.new-api", false);
+    outputConf.set("mapred.output.format.class", TextOutputFormat.class.getName());
+    outputConf.set(FileOutputFormat.OUTDIR, outputPath);
+    DataSinkDescriptor od = MROutput.createConfigBuilder(outputConf, null).build();
     checkerVertex.addDataSink("union", od);
     
 
     Configuration allPartsConf = new Configuration(tezConf);
-    DataSinkDescriptor od2 = MROutput.createConfigurer(allPartsConf,
-        TextOutputFormat.class, outputPath + "-all-parts").create();
+    DataSinkDescriptor od2 = MROutput.createConfigBuilder(allPartsConf,
+        TextOutputFormat.class, outputPath + "-all-parts").build();
     checkerVertex.addDataSink("all-parts", od2);
 
     Configuration partsConf = new Configuration(tezConf);    
-    DataSinkDescriptor od1 = MROutput.createConfigurer(partsConf,
-        TextOutputFormat.class, outputPath + "-parts").create();
+    DataSinkDescriptor od1 = MROutput.createConfigBuilder(partsConf,
+        TextOutputFormat.class, outputPath + "-parts").build();
     VertexGroup unionVertex = dag.createVertexGroup("union", mapVertex1, mapVertex2);
     unionVertex.addDataSink("parts", od1);
 
-    OrderedPartitionedKVEdgeConfigurer edgeConf = OrderedPartitionedKVEdgeConfigurer
+    OrderedPartitionedKVEdgeConfig edgeConf = OrderedPartitionedKVEdgeConfig
         .newBuilder(Text.class.getName(), IntWritable.class.getName(),
             HashPartitioner.class.getName()).build();
 
@@ -211,10 +216,10 @@ public class UnionExample {
         .addVertex(mapVertex3)
         .addVertex(checkerVertex)
         .addEdge(
-            new Edge(mapVertex3, checkerVertex, edgeConf.createDefaultEdgeProperty()))
+            Edge.create(mapVertex3, checkerVertex, edgeConf.createDefaultEdgeProperty()))
         .addEdge(
-            new GroupInputEdge(unionVertex, checkerVertex, edgeConf.createDefaultEdgeProperty(),
-                new InputDescriptor(
+            GroupInputEdge.create(unionVertex, checkerVertex, edgeConf.createDefaultEdgeProperty(),
+                InputDescriptor.create(
                     ConcatenatedMergedKeyValuesInput.class.getName())));
     return dag;  
   }
@@ -251,7 +256,7 @@ public class UnionExample {
     // TEZ-674 Obtain tokens based on the Input / Output paths. For now assuming staging dir
     // is the same filesystem as the one used for Input/Output.
     
-    TezClient tezSession = new TezClient("UnionExampleSession", tezConf);
+    TezClient tezSession = TezClient.create("UnionExampleSession", tezConf);
     tezSession.start();
 
     DAGClient dagClient = null;

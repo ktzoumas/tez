@@ -18,6 +18,7 @@
 
 package org.apache.tez.mapreduce.input;
 
+import java.nio.ByteBuffer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -110,7 +111,9 @@ public class TestMultiMRInput {
     assertEquals(1, splits.length);
 
     MRSplitProto splitProto = MRInputHelpers.createSplitProto(splits[0]);
-    InputDataInformationEvent event = new InputDataInformationEvent(0, splitProto.toByteArray());
+    InputDataInformationEvent event =
+        InputDataInformationEvent.createWithSerializedPayload(0,
+            splitProto.toByteString().asReadOnlyByteBuffer());
 
     eventList.clear();
     eventList.add(event);
@@ -169,10 +172,14 @@ public class TestMultiMRInput {
     assertEquals(2, splits.length);
 
     MRSplitProto splitProto1 = MRInputHelpers.createSplitProto(splits[0]);
-    InputDataInformationEvent event1 = new InputDataInformationEvent(0, splitProto1.toByteArray());
+    InputDataInformationEvent event1 =
+        InputDataInformationEvent.createWithSerializedPayload(0,
+            splitProto1.toByteString().asReadOnlyByteBuffer());
 
     MRSplitProto splitProto2 = MRInputHelpers.createSplitProto(splits[1]);
-    InputDataInformationEvent event2 = new InputDataInformationEvent(0, splitProto2.toByteArray());
+    InputDataInformationEvent event2 =
+        InputDataInformationEvent.createWithSerializedPayload(0,
+            splitProto2.toByteString().asReadOnlyByteBuffer());
 
     eventList.clear();
     eventList.add(event1);
@@ -220,8 +227,12 @@ public class TestMultiMRInput {
     assertEquals(1, splits.length);
 
     MRSplitProto splitProto = MRInputHelpers.createSplitProto(splits[0]);
-    InputDataInformationEvent event1 = new InputDataInformationEvent(0, splitProto.toByteArray());
-    InputDataInformationEvent event2 = new InputDataInformationEvent(1, splitProto.toByteArray());
+    InputDataInformationEvent event1 =
+        InputDataInformationEvent.createWithSerializedPayload(0,
+            splitProto.toByteString().asReadOnlyByteBuffer());
+    InputDataInformationEvent event2 =
+        InputDataInformationEvent.createWithSerializedPayload(1,
+            splitProto.toByteString().asReadOnlyByteBuffer());
 
     eventList.clear();
     eventList.add(event1);
@@ -250,7 +261,7 @@ public class TestMultiMRInput {
     doReturn(1).when(inputContext).getTaskIndex();
     doReturn(1).when(inputContext).getTaskVertexIndex();
     doReturn("taskVertexName").when(inputContext).getTaskVertexName();
-    doReturn(new UserPayload(payload)).when(inputContext).getUserPayload();
+    doReturn(UserPayload.create(ByteBuffer.wrap(payload))).when(inputContext).getUserPayload();
     return inputContext;
   }
 

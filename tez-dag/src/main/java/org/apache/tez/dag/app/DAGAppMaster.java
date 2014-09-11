@@ -88,7 +88,6 @@ import org.apache.hadoop.yarn.security.AMRMTokenIdentifier;
 import org.apache.hadoop.yarn.util.Clock;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.apache.hadoop.yarn.util.SystemClock;
-import org.apache.tez.common.LogUtils;
 import org.apache.tez.common.TezCommonUtils;
 import org.apache.tez.common.TezConverterUtils;
 import org.apache.tez.common.TezUtilsInternal;
@@ -140,7 +139,6 @@ import org.apache.tez.dag.app.rm.container.ContainerSignatureMatcher;
 import org.apache.tez.dag.app.rm.node.AMNodeEventType;
 import org.apache.tez.dag.app.rm.node.AMNodeMap;
 import org.apache.tez.common.security.ACLManager;
-import org.apache.tez.common.security.Groups;
 import org.apache.tez.dag.history.DAGHistoryEvent;
 import org.apache.tez.dag.history.HistoryEventHandler;
 import org.apache.tez.dag.history.events.AMLaunchedEvent;
@@ -218,8 +216,6 @@ public class DAGAppMaster extends AbstractService {
   private HistoryEventHandler historyEventHandler;
   private final Map<String, LocalResource> amResources = new HashMap<String, LocalResource>();
   private final Map<String, LocalResource> cumulativeAdditionalResources = new HashMap<String, LocalResource>();
-  private final Map<String, LocalResource> sessionResources =
-    new HashMap<String, LocalResource>();
 
   private boolean isLocal = false; //Local mode flag
 
@@ -303,6 +299,9 @@ public class DAGAppMaster extends AbstractService {
     if (isLocal) {
        UserGroupInformation.setConfiguration(conf);
        appMasterUgi = UserGroupInformation.getCurrentUser();
+       conf.setBoolean(TezConfiguration.TEZ_AM_NODE_BLACKLISTING_ENABLED, false);
+       conf.set(TezConfiguration.TEZ_HISTORY_LOGGING_SERVICE_CLASS,
+           TezConfiguration.TEZ_HISTORY_LOGGING_SERVICE_CLASS_DEFAULT);
     }
     conf.setBoolean(Dispatcher.DISPATCHER_EXIT_ON_ERROR_KEY, !isLocal);
     String strAppId = this.appAttemptID.getApplicationId().toString();
@@ -310,9 +309,7 @@ public class DAGAppMaster extends AbstractService {
 
     dispatcher = createDispatcher();
     context = new RunningAppContext(conf);
-    Groups userGroupMapping = new Groups(this.amConf);
-    this.aclManager = new ACLManager(userGroupMapping, appMasterUgi.getShortUserName(),
-        this.amConf);
+    this.aclManager = new ACLManager(appMasterUgi.getShortUserName(), this.amConf);
 
     clientHandler = new DAGClientHandler(this);
 
@@ -402,15 +399,10 @@ public class DAGAppMaster extends AbstractService {
       FileInputStream sessionResourcesStream = null;
       try {
         sessionResourcesStream = new FileInputStream(
-          new File(workingDirectory, TezConstants.TEZ_SESSION_LOCAL_RESOURCES_PB_FILE_NAME));
-        PlanLocalResourcesProto sessionLocalResourcesProto =
-          PlanLocalResourcesProto.parseDelimitedFrom(sessionResourcesStream);
+          new File(workingDirectory, TezConstants.TEZ_AM_LOCAL_RESOURCES_PB_FILE_NAME));
         PlanLocalResourcesProto amLocalResourceProto = PlanLocalResourcesProto
             .parseDelimitedFrom(sessionResourcesStream);
-        sessionResources.putAll(DagTypeConverters.convertFromPlanLocalResources(
-          sessionLocalResourcesProto));
         amResources.putAll(DagTypeConverters.convertFromPlanLocalResources(amLocalResourceProto));
-        amResources.putAll(sessionResources);
       } finally {
         if (sessionResourcesStream != null) {
           sessionResourcesStream.close();
@@ -590,7 +582,9 @@ public class DAGAppMaster extends AbstractService {
         return;
       }
 
-      shutdownHandlerRunning.set(true);
+      synchronized (shutdownHandlerRunning) {
+        shutdownHandlerRunning.set(true);
+      }
       LOG.info("Handling DAGAppMaster shutdown");
 
       AMShutdownRunnable r = new AMShutdownRunnable(now);
@@ -665,7 +659,7 @@ public class DAGAppMaster extends AbstractService {
     if (dagPB.hasCredentialsBinary()) {
       dagCredentials = DagTypeConverters.convertByteStringToCredentials(dagPB
           .getCredentialsBinary());
-      LogUtils.logCredentials(LOG, dagCredentials, "dag");
+      TezCommonUtils.logCredentials(LOG, dagCredentials, "dag");
     } else {
       dagCredentials = new Credentials();
     }
@@ -1191,11 +1185,6 @@ public class DAGAppMaster extends AbstractService {
     @Override
     public TaskSchedulerEventHandler getTaskScheduler() {
       return taskSchedulerEventHandler;
-    }
-
-    @Override
-    public Map<String, LocalResource> getSessionResources() {
-      return sessionResources;
     }
 
     @Override
@@ -1750,6 +1739,7 @@ public class DAGAppMaster extends AbstractService {
             if (appMaster.shutdownHandlerRunning.get()) {
               LOG.info("The shutdown handler is still running, waiting for it to complete");
               appMaster.shutdownHandlerRunning.wait();
+              LOG.info("The shutdown handler has completed");
             }
           } catch (InterruptedException e) {
             // Ignore

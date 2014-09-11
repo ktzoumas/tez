@@ -395,7 +395,7 @@ public class TestTaskExecution {
 
     @Override
     public void initialize() throws Exception {
-      parseConf(getContext().getUserPayload().getPayload());
+      parseConf(getContext().getUserPayload().deepCopyAsArray());
     }
 
     private void parseConf(byte[] bytes) {
@@ -691,9 +691,9 @@ public class TestTaskExecution {
     TezVertexID vertexId = TezVertexID.getInstance(dagId, 1);
     TezTaskID taskId = TezTaskID.getInstance(vertexId, 1);
     TezTaskAttemptID taskAttemptId = TezTaskAttemptID.getInstance(taskId, 1);
-    ProcessorDescriptor processorDescriptor = new ProcessorDescriptor(processorClass)
-        .setUserPayload(new UserPayload(processorConf));
-    TaskSpec taskSpec = new TaskSpec(taskAttemptId, "dagName", "vertexName", processorDescriptor,
+    ProcessorDescriptor processorDescriptor = ProcessorDescriptor.create(processorClass)
+        .setUserPayload(UserPayload.create(ByteBuffer.wrap(processorConf)));
+    TaskSpec taskSpec = new TaskSpec(taskAttemptId, "dagName", "vertexName", -1, processorDescriptor,
         new ArrayList<InputSpec>(), new ArrayList<OutputSpec>(), null);
 
     TezTaskRunner taskRunner = new TezTaskRunner(tezConf, ugi, localDirs, taskSpec, umbilical, 1,

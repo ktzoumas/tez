@@ -19,6 +19,7 @@
 package org.apache.tez.client;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -134,7 +135,7 @@ public class TestTezClient {
       ApplicationSubmissionContext context = captor.getValue();
       Assert.assertEquals(3, context.getAMContainerSpec().getLocalResources().size());
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
-          TezConstants.TEZ_SESSION_LOCAL_RESOURCES_PB_FILE_NAME));
+          TezConstants.TEZ_AM_LOCAL_RESOURCES_PB_FILE_NAME));
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
           TezConstants.TEZ_PB_BINARY_CONF_NAME));
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
@@ -143,9 +144,18 @@ public class TestTezClient {
       verify(client.mockYarnClient, times(0)).submitApplication(captor.capture());
     }
     
-    DAG dag = new DAG("DAG").addVertex(
-        new Vertex("Vertex", new ProcessorDescriptor("P"), 1, Resource.newInstance(1, 1)));
+    String mockLR1Name = "LR1";
+    Map<String, LocalResource> lrDAG = Collections.singletonMap(mockLR1Name, LocalResource
+        .newInstance(URL.newInstance("file:///", "localhost", 0, "test"), LocalResourceType.FILE,
+            LocalResourceVisibility.PUBLIC, 1, 1));
+    Vertex vertex = Vertex.create("Vertex", ProcessorDescriptor.create("P"), 1,
+        Resource.newInstance(1, 1));
+    DAG dag = DAG.create("DAG").addVertex(vertex).addTaskLocalFiles(lrDAG);
     DAGClient dagClient = client.submitDAG(dag);
+    
+    // verify that both DAG and TezClient localResources are added to the vertex
+    Map<String, LocalResource> vertexLR = vertex.getTaskLocalFiles();
+    Assert.assertTrue(vertexLR.containsKey(mockLR1Name));
     
     Assert.assertTrue(dagClient.getExecutionContext().contains(client.mockAppId.toString()));
     
@@ -157,7 +167,7 @@ public class TestTezClient {
       ApplicationSubmissionContext context = captor.getValue();
       Assert.assertEquals(4, context.getAMContainerSpec().getLocalResources().size());
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
-          TezConstants.TEZ_SESSION_LOCAL_RESOURCES_PB_FILE_NAME));
+          TezConstants.TEZ_AM_LOCAL_RESOURCES_PB_FILE_NAME));
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
           TezConstants.TEZ_PB_BINARY_CONF_NAME));
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
@@ -171,14 +181,14 @@ public class TestTezClient {
     lrs.clear();
     lrs.put(lrName2, LocalResource.newInstance(URL.newInstance("file:///", "localhost", 0, "test"),
         LocalResourceType.FILE, LocalResourceVisibility.PUBLIC, 1, 1));
-    client.addAppMasterLocalResources(lrs);
+    client.addAppMasterLocalFiles(lrs);
     
     ApplicationId appId2 = ApplicationId.newInstance(0, 2);
     when(client.mockYarnClient.createApplication().getNewApplicationResponse().getApplicationId())
         .thenReturn(appId2);
     
-    dag = new DAG("DAG").addVertex(
-        new Vertex("Vertex", new ProcessorDescriptor("P"), 1, Resource.newInstance(1, 1)));
+    dag = DAG.create("DAG").addVertex(
+        Vertex.create("Vertex", ProcessorDescriptor.create("P"), 1, Resource.newInstance(1, 1)));
     dagClient = client.submitDAG(dag);
     
     if (isSession) {
@@ -199,7 +209,7 @@ public class TestTezClient {
       ApplicationSubmissionContext context = captor.getValue();
       Assert.assertEquals(5, context.getAMContainerSpec().getLocalResources().size());
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
-          TezConstants.TEZ_SESSION_LOCAL_RESOURCES_PB_FILE_NAME));
+          TezConstants.TEZ_AM_LOCAL_RESOURCES_PB_FILE_NAME));
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
           TezConstants.TEZ_PB_BINARY_CONF_NAME));
       Assert.assertTrue(context.getAMContainerSpec().getLocalResources().containsKey(
@@ -227,7 +237,7 @@ public class TestTezClient {
 
     configure(client);
     client.start();
-    PreWarmVertex vertex = new PreWarmVertex("PreWarm", 1, Resource.newInstance(1, 1));
+    PreWarmVertex vertex = PreWarmVertex.create("PreWarm", 1, Resource.newInstance(1, 1));
     client.preWarm(vertex);
     
     ArgumentCaptor<SubmitDAGRequestProto> captor1 = ArgumentCaptor.forClass(SubmitDAGRequestProto.class);
