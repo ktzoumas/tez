@@ -29,7 +29,6 @@ import org.apache.tez.runtime.api.Writer;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 import org.apache.tez.runtime.library.common.readers.UnorderedKVReader;
-import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
 import org.apache.tez.runtime.library.input.UnorderedKVInput;
 import org.apache.tez.runtime.library.output.UnorderedKVOutput;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
