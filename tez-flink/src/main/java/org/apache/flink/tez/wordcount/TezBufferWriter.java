@@ -1,4 +1,4 @@
-package org.apache.flink.tez.oldstuff;
+package org.apache.flink.tez.wordcount;
 
 
 import org.apache.flink.runtime.io.network.Buffer;
