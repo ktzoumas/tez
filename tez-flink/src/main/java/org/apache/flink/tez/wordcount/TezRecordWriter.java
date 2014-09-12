@@ -8,8 +8,6 @@ import org.apache.flink.runtime.io.network.api.ChannelSelector;
 import org.apache.flink.runtime.io.network.api.RoundRobinChannelSelector;
 import org.apache.flink.runtime.io.network.serialization.RecordSerializer;
 import org.apache.flink.runtime.io.network.serialization.SpanningRecordSerializer;
-import org.apache.flink.runtime.operators.shipping.OutputEmitter;
-import org.apache.flink.tez.oldstuff.TezBufferWriter;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.io.IOException;

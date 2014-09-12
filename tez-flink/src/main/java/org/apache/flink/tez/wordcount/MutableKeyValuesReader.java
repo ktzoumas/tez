@@ -8,7 +8,6 @@ import org.apache.flink.runtime.io.network.api.MutableReader;
 import org.apache.flink.runtime.io.network.serialization.AdaptiveSpanningRecordDeserializer;
 import org.apache.flink.runtime.io.network.serialization.RecordDeserializer;
 import org.apache.hadoop.io.LongWritable;
-import org.apache.tez.runtime.common.objectregistry.ObjectRegistryImpl;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValuesReader;
 

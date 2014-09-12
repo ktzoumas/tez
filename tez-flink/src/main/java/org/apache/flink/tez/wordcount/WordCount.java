@@ -36,8 +36,8 @@ import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
-import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfigurer;
-import org.apache.tez.runtime.library.conf.UnorderedPartitionedKVEdgeConfigurer;
+import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfig;
+import org.apache.tez.runtime.library.conf.UnorderedPartitionedKVEdgeConfig;
 import org.apache.tez.runtime.library.partitioner.HashPartitioner;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
 
@@ -193,25 +193,24 @@ public class WordCount {
         //DataSinkDescriptor dataSink = MROutput.createConfigurer(new Configuration(tezConf),
           //      TextOutputFormat.class, "/tmp/words.txt/").create();
 
-        Vertex dataSource = new Vertex ("DataSource",
-                new ProcessorDescriptor(CollectionDataSource.class.getName()), DOP);
+        Vertex dataSource = Vertex.create ("DataSource", ProcessorDescriptor.create(
+                CollectionDataSource.class.getName()), DOP);
 
-        Vertex tokenizer = new Vertex ("TokenizerVertex",
-                new ProcessorDescriptor(Tokenizer.class.getName()),DOP);
+        Vertex tokenizer = Vertex.create ("TokenizerVertex",
+                ProcessorDescriptor.create(Tokenizer.class.getName()),DOP);
 
-        Vertex summer = new Vertex("SumVertex",
-                new ProcessorDescriptor(Summer.class.getName()), DOP);
-                //.addDataSink("DataSink", dataSink);
+        Vertex summer = Vertex.create ("SumVertex",
+                ProcessorDescriptor.create(Summer.class.getName()), DOP);
 
-        Vertex dataSink = new Vertex ("DataSink",
-                new ProcessorDescriptor(FileDataSink.class.getName()), DOP);
+        Vertex dataSink = Vertex.create ("DataSink",
+                ProcessorDescriptor.create (FileDataSink.class.getName()), DOP);
 
-        UnorderedKVEdgeConfigurer edgeConf = UnorderedKVEdgeConfigurer
+        UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
                 .newBuilder(LongWritable.class.getName(), BufferWritable.class.getName())
                 .setFromConfiguration(tezConf)
                 .build();
 
-        UnorderedPartitionedKVEdgeConfigurer edgeConf2 = UnorderedPartitionedKVEdgeConfigurer
+        UnorderedPartitionedKVEdgeConfig edgeConf2 = UnorderedPartitionedKVEdgeConfig
                 .newBuilder(LongWritable.class.getName(), BufferWritable.class.getName(), HashPartitioner.class.getName())
                 .setFromConfiguration(tezConf)
                 .build();
@@ -220,13 +219,13 @@ public class WordCount {
 
         EdgeProperty edgeProperty2 = edgeConf2.createDefaultEdgeProperty();
 
-        Edge edge1 = new Edge (dataSource, tokenizer, edgeProperty1);
+        Edge edge1 = Edge.create (dataSource, tokenizer, edgeProperty1);
 
-        Edge edge2 = new Edge (tokenizer, summer, edgeProperty1);
+        Edge edge2 = Edge.create(tokenizer, summer, edgeProperty1);
 
-        Edge edge3 = new Edge (summer, dataSink, edgeProperty1);
+        Edge edge3 = Edge.create (summer, dataSink, edgeProperty1);
 
-        DAG dag = new DAG ("WordCount");
+        DAG dag = DAG.create ("WordCount");
 
         dag.addVertex(dataSource).addVertex(tokenizer).addVertex(summer).addVertex(dataSink)
                 .addEdge(edge1).addEdge(edge2).addEdge(edge3);
@@ -242,7 +241,7 @@ public class WordCount {
             tezConf.set("fs.defaultFS", "file:///");
             tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
 
-            TezClient tezClient = new TezClient("FlinkWordCount", tezConf);
+            TezClient tezClient = TezClient.create("FlinkWordCount", tezConf);
             tezClient.start();
 
             try {

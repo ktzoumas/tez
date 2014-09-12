@@ -26,6 +26,9 @@ public abstract class DataSinkProcessor<T> extends SimpleProcessor {
 
     @Override
     public void run() throws Exception {
+
+        this.getContext().getVertexParallelism();
+
         KeyValueReader kvReader = (KeyValueReader) getInputs().values().iterator().next().getReader();
 
         ReaderIterator<T> input = new ReaderIterator<T>(
