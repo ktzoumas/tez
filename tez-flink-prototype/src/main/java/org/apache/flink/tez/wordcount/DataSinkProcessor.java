@@ -28,9 +28,8 @@ public abstract class DataSinkProcessor<T> extends SimpleProcessor {
 
         KeyValueReader kvReader = (KeyValueReader) getInputs().values().iterator().next().getReader();
 
-        ReaderIterator<T> input = new ReaderIterator<T>(
-                new MutableKeyValueReader<DeserializationDelegate<T>>(this, kvReader, getContext().getVertexParallelism()),
-                typeSerializer);
+        //WritableSerializationDelegate.registerSerializer(typeSerializer);
+        TezReaderIterator<T> input = new TezReaderIterator<T>(kvReader);
 
         T record = typeSerializer.createInstance();
         while ((record = input.next(record)) != null) {

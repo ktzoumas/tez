@@ -45,39 +45,21 @@ public abstract class FlatMapProcessor<IN, OUT> extends SimpleProcessor {
         kvReader = (KeyValueReader) getInputs().values().iterator().next().getReader();
         kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
 
-        ReaderIterator<IN> readerIterator = new ReaderIterator<IN>(
-                new MutableKeyValueReader<DeserializationDelegate<IN>>(this,
-                        kvReader, getContext().getVertexParallelism()),
-                inTypeSerializer
-        );
+        //WritableSerializationDelegate.registerSerializer(inTypeSerializer);
+        TezReaderIterator<IN> readerIterator = new TezReaderIterator<IN>(kvReader);
         taskContext.setInput1(readerIterator, inTypeSerializer);
+
 
         driver = new FlatMapDriver<IN, OUT>();
         driver.setup(taskContext);
 
-        //OutputEmitter<OUT> outputEmitter = new OutputEmitter<OUT>(ShipStrategyType.PARTITION_HASH,
-        //        outTypeComparator);
-
-        //ForwardingSelector<OUT> channelSelector =
-        //        new ForwardingSelector<OUT>(this.getContext().getTaskIndex());
 
         PartitioningSelector<OUT> channelSelector =
                  new PartitioningSelector<OUT>(this.outTypeComparator);
+        int numOutputStreams = getContext().getVertexParallelism();
+        collector = new TezOutputCollector<OUT>(kvWriter, channelSelector, outTypeSerializer, numOutputStreams);
 
-        TezRecordWriter<SerializationDelegate<OUT>> tezRecordWriter =
-                new TezRecordWriter<SerializationDelegate<OUT>>(kvWriter,
-                        channelSelector,
-                        getContext().getVertexParallelism(),
-                        getContext().getTaskIndex());
 
-        collector = new TezOutputCollector<OUT>(tezRecordWriter, outTypeSerializer);
-
-        /*
-        collector = new TezOutputCollector<OUT>(
-                new TezRecordWriter<SerializationDelegate<OUT>>(kvWriter, channelSelector,
-                        getContext().getVertexParallelism(), getContext().getTaskIndex()),
-                        outTypeSerializer);
-                        */
         taskContext.setCollector(collector);
 
 

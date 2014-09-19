@@ -22,14 +22,15 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.runtime.io.network.bufferprovider.GlobalBufferPool;
 import org.apache.flink.util.Collector;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.tez.client.TezClient;
 import org.apache.tez.dag.api.*;
 import org.apache.tez.dag.api.client.DAGClient;
 import org.apache.tez.dag.api.client.DAGStatus;
 import org.apache.tez.runtime.api.ProcessorContext;
-import org.apache.tez.runtime.library.api.Partitioner;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfig;
+import org.apache.tez.runtime.library.conf.UnorderedKVInputConfig;
 import org.apache.tez.runtime.library.conf.UnorderedPartitionedKVEdgeConfig;
 
 import java.util.Arrays;
@@ -37,7 +38,7 @@ import java.util.Arrays;
 
 public class WordCount {
 
-    public static int DOP = 1;
+    public static int DOP = 4;
 
     public static int BUF_COUNTER = 0;
 
@@ -285,17 +286,6 @@ public class WordCount {
         }
     }
 
-    public static class FlinkPartitioner implements Partitioner {
-
-        @Override
-        public int getPartition(Object key, Object value, int numPartitions) {
-            if (!(key instanceof PairWritable))
-                throw new RuntimeException("Keys in Flink should always be PairWritable");
-            PairWritable pair = (PairWritable) key;
-            int destChannel = (int) pair.second();
-            return destChannel;
-        }
-    }
 
 
     public static DAG createDAG (TezConfiguration tezConf) throws Exception {
@@ -313,27 +303,64 @@ public class WordCount {
         Vertex dataSink = Vertex.create ("DataSink",
                 ProcessorDescriptor.create (FileDataSink.class.getName()), DOP);
 
-        UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
-                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName())
+        FlinkUnorderedKVEdgeConfig srcMapEdgeConf = (FlinkUnorderedKVEdgeConfig) (FlinkUnorderedKVEdgeConfig
+                .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
                 .setFromConfiguration(tezConf)
+                .configureInput()
+                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                        new StringSerializer()
+                )))
+                .done()
                 .build();
 
-        UnorderedPartitionedKVEdgeConfig edgeConf2 = UnorderedPartitionedKVEdgeConfig
-                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName(),
-                        FlinkPartitioner.class.getName())
+        FlinkUnorderedPartitionedKVEdgeConfig mapReduceEdgeConf = (FlinkUnorderedPartitionedKVEdgeConfig) (FlinkUnorderedPartitionedKVEdgeConfig
+                .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName(),
+                        SimplePartitioner.class.getName())
                 .setFromConfiguration(tezConf)
                 .setAdditionalConfiguration(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, "true")
+                .configureInput()
+                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                        new TupleSerializer<Tuple2<String, Integer>>(
+                                (Class<Tuple2<String, Integer>>) (Class<?>) Tuple2.class,
+                                new TypeSerializer[]{
+                                        new StringSerializer(),
+                                        new IntSerializer()
+                                }
+                        ))))
+                .done()
                 .build();
 
-        EdgeProperty edgeProperty1 = edgeConf.createDefaultOneToOneEdgeProperty();
 
-        EdgeProperty edgeProperty2 = edgeConf2.createDefaultEdgeProperty();
 
-        Edge edge1 = Edge.create (dataSource, tokenizer, edgeProperty1);
 
-        Edge edge2 = Edge.create(tokenizer, summer, edgeProperty2);
+        FlinkUnorderedKVEdgeConfig reduceSinkConf = (FlinkUnorderedKVEdgeConfig) (FlinkUnorderedKVEdgeConfig
+                .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
+                .setFromConfiguration(tezConf)
+                .configureInput()
+                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                new TupleSerializer<Tuple2<String, Integer>>(
+                        (Class<Tuple2<String, Integer>>) (Class<?>) Tuple2.class,
+                        new TypeSerializer[]{
+                                new StringSerializer(),
+                                new IntSerializer()
+                        }
+                ))))
+                .done()
+                .build();
 
-        Edge edge3 = Edge.create (summer, dataSink, edgeProperty1);
+
+
+        EdgeProperty srcMapEdgeProperty = srcMapEdgeConf.createDefaultOneToOneEdgeProperty();
+
+        EdgeProperty mapReduceEdgeProperty = mapReduceEdgeConf.createDefaultEdgeProperty();
+
+        EdgeProperty reduceSinkEdgeProperty = reduceSinkConf.createDefaultOneToOneEdgeProperty();
+
+        Edge edge1 = Edge.create (dataSource, tokenizer, srcMapEdgeProperty);
+
+        Edge edge2 = Edge.create(tokenizer, summer, mapReduceEdgeProperty);
+
+        Edge edge3 = Edge.create (summer, dataSink, reduceSinkEdgeProperty);
 
         DAG dag = DAG.create ("WordCount");
 
@@ -360,13 +387,16 @@ public class WordCount {
                 ProcessorDescriptor.create(FileDataSink.class.getName()), DOP);
 
         UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
-                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName())
+                .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
                 .setFromConfiguration(tezConf)
+                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                        new StringSerializer()
+                ))
                 .build();
 
         UnorderedPartitionedKVEdgeConfig edgeConf2 = UnorderedPartitionedKVEdgeConfig
-                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName(),
-                        FlinkPartitioner.class.getName())
+                .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName(),
+                        SimplePartitioner.class.getName())
                 .setFromConfiguration(tezConf)
                 .setAdditionalConfiguration(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, "true")
                 .build();
@@ -399,7 +429,7 @@ public class WordCount {
                 ProcessorDescriptor.create(TextDataSink.class.getName()), DOP);
 
         UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
-                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName())
+                .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
                 .setFromConfiguration(tezConf)
                 .build();
 
@@ -429,7 +459,7 @@ public class WordCount {
             tezClient.start();
 
             try {
-                DAG dag = createMapDAG(tezConf);
+                DAG dag = createDAG(tezConf);
 
                 tezClient.waitTillReady();
                 System.out.println("Submitting DAG to Tez Client");

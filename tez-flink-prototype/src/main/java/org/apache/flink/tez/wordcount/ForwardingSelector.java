@@ -1,11 +1,9 @@
 package org.apache.flink.tez.wordcount;
 
-import org.apache.flink.runtime.io.network.api.ChannelSelector;
-import org.apache.flink.runtime.plugable.SerializationDelegate;
 
 // Forwards to the sub-task with the same index
 
-public class ForwardingSelector<T> implements ChannelSelector<SerializationDelegate<T>> {
+public class ForwardingSelector<T> implements ChannelSelector<T> {
 
     int [] nextChannelToSendTo = new int [1];
 
@@ -14,7 +12,7 @@ public class ForwardingSelector<T> implements ChannelSelector<SerializationDeleg
     }
 
     @Override
-    public int[] selectChannels(SerializationDelegate<T> record, int numberOfOutputChannels) {
+    public int[] selectChannels(T record, int numberOfOutputChannels) {
         return nextChannelToSendTo;
     }
 }

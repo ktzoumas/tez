@@ -1,11 +1,10 @@
 package org.apache.flink.tez.wordcount;
 
 import org.apache.flink.api.common.typeutils.TypeComparator;
-import org.apache.flink.runtime.io.network.api.ChannelSelector;
 import org.apache.flink.runtime.plugable.SerializationDelegate;
 
 
-public class PartitioningSelector<T> implements ChannelSelector<SerializationDelegate<T>> {
+public class PartitioningSelector<T> implements ChannelSelector<T> {
 
     private final TypeComparator<T> comparator;
 
@@ -17,9 +16,7 @@ public class PartitioningSelector<T> implements ChannelSelector<SerializationDel
 
 
     @Override
-    public int[] selectChannels(SerializationDelegate<T> delegate, int numberOfChannels) {
-        T record = delegate.getInstance();
-
+    public int[] selectChannels(T record, int numberOfChannels) {
         int hash = this.comparator.hash(record);
 
         hash = murmurHash(hash);

@@ -39,17 +39,7 @@ public abstract class SingleSplitDataSourceProcessor<T, IS extends InputSplit> e
         ForwardingSelector<T> channelSelector =
                 new ForwardingSelector<T>(this.getContext().getTaskIndex());
 
-        //RoundRobinChannelSelector<SerializationDelegate<T>> channelSelector =
-        //        new RoundRobinChannelSelector<SerializationDelegate<T>>();
-
-        TezRecordWriter<SerializationDelegate<T>> tezRecordWriter =
-                new TezRecordWriter<SerializationDelegate<T>>(kvWriter,
-                        channelSelector,
-                        getContext().getVertexParallelism(),
-                        getContext().getTaskIndex());
-
-
-        TezOutputCollector<T> collector = new TezOutputCollector<T>(tezRecordWriter, typeSerializer);
+        TezOutputCollector<T> collector = new TezOutputCollector<T>(kvWriter, channelSelector, typeSerializer, 1);
 
         inputFormat.open(getSplit());
 

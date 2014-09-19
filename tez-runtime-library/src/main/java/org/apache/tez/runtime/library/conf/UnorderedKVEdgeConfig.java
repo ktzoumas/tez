@@ -49,7 +49,7 @@ public class UnorderedKVEdgeConfig extends HadoopKeyValuesBasedBaseEdgeConfig {
   private final UnorderedKVOutputConfig outputConf;
   private final UnorderedKVInputConfig inputConf;
 
-  private UnorderedKVEdgeConfig(
+  protected UnorderedKVEdgeConfig(
       UnorderedKVOutputConfig outputConfiguration,
       UnorderedKVInputConfig inputConfiguration) {
     this.outputConf = outputConfiguration;
@@ -148,22 +148,22 @@ public class UnorderedKVEdgeConfig extends HadoopKeyValuesBasedBaseEdgeConfig {
   @InterfaceStability.Evolving
   public static class Builder extends HadoopKeyValuesBasedBaseEdgeConfig.Builder<Builder> {
 
-    private final UnorderedKVOutputConfig.Builder outputBuilder =
+     protected final UnorderedKVOutputConfig.Builder outputBuilder =
         new UnorderedKVOutputConfig.Builder();
-    private final UnorderedKVOutputConfig.SpecificBuilder<UnorderedKVEdgeConfig.Builder>
+     protected final UnorderedKVOutputConfig.SpecificBuilder<UnorderedKVEdgeConfig.Builder>
         specificOutputBuilder =
         new UnorderedKVOutputConfig.SpecificBuilder<UnorderedKVEdgeConfig.Builder>(
             this, outputBuilder);
 
-    private final UnorderedKVInputConfig.Builder inputBuilder =
+    protected final UnorderedKVInputConfig.Builder inputBuilder =
         new UnorderedKVInputConfig.Builder();
-    private final UnorderedKVInputConfig.SpecificBuilder<UnorderedKVEdgeConfig.Builder>
+      protected final UnorderedKVInputConfig.SpecificBuilder<UnorderedKVEdgeConfig.Builder>
         specificInputBuilder =
         new UnorderedKVInputConfig.SpecificBuilder<UnorderedKVEdgeConfig.Builder>(
             this, inputBuilder);
 
     @InterfaceAudience.Private
-    Builder(String keyClassName, String valueClassName) {
+    protected Builder(String keyClassName, String valueClassName) {
       outputBuilder.setKeyClassName(keyClassName);
       outputBuilder.setValueClassName(valueClassName);
       inputBuilder.setKeyClassName(keyClassName);

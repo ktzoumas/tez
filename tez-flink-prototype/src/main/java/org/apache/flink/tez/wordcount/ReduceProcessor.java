@@ -62,11 +62,6 @@ public abstract class ReduceProcessor<T> extends SimpleProcessor {
     @Override
     public void run() throws Exception {
 
-        int dop = this.getContext().getVertexParallelism();
-        int vertexIndex = this.getContext().getTaskVertexIndex();
-        int index = this.getContext().getTaskIndex();
-        long memory = this.getContext().getTotalMemoryAvailableToTask();
-
         taskContext.setUdf(function);
 
         taskContext.setComparator1(this.comparator);
@@ -74,15 +69,8 @@ public abstract class ReduceProcessor<T> extends SimpleProcessor {
         kvReader = (KeyValueReader) getInputs().values().iterator().next().getReader();
         kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
 
-        ReaderIterator<T> readerIterator = new ReaderIterator<T>(
-                new MutableKeyValueReader<DeserializationDelegate<T>>(this, kvReader,
-                        this.getContext().getVertexParallelism()),
-                typeSerializer
-        );
-
-        //T record = null;
-        //record = readerIterator.next(record);
-
+        //WritableSerializationDelegate.registerSerializer(typeSerializer);
+        TezReaderIterator<T> readerIterator = new TezReaderIterator<T>(kvReader);
 
         sorter = new UnilateralSortMerger<T>(
                 memoryManager,
@@ -104,15 +92,11 @@ public abstract class ReduceProcessor<T> extends SimpleProcessor {
         driver = new ReduceDriver<T>();
         driver.setup(taskContext);
 
-        //OutputEmitter<T> outputEmitter = new OutputEmitter<T>(ShipStrategyType.FORWARD,
-        //        comparator);
-
         ForwardingSelector<T> channelSelector =
                 new ForwardingSelector<T>(this.getContext().getTaskIndex());
 
-        collector = new TezOutputCollector<T>(
-                new TezRecordWriter<SerializationDelegate<T>>(kvWriter, channelSelector,
-                        getContext().getVertexParallelism(), getContext().getTaskVertexIndex()), typeSerializer);
+        collector = new TezOutputCollector<T>(kvWriter, channelSelector, typeSerializer, 1);
+
         taskContext.setCollector(collector);
 
         try {

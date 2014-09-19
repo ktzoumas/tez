@@ -2,43 +2,49 @@ package org.apache.flink.tez.wordcount;
 
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.runtime.operators.shipping.OutputEmitter;
 import org.apache.flink.runtime.plugable.SerializationDelegate;
 import org.apache.flink.util.Collector;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.io.IOException;
 
 public class TezOutputCollector<T> implements Collector<T> {
 
-    protected TezRecordWriter<SerializationDelegate<T>> writer;
-    private final SerializationDelegate<T> delegate;
+    private KeyValueWriter writer;
 
-    public TezOutputCollector(TezRecordWriter<SerializationDelegate<T>> writer, TypeSerializer<T> typeSerializer) {
-        this.delegate = new SerializationDelegate<T>(typeSerializer);
+    private ChannelSelector<T> outputEmitter;
+
+    int numberOfOutputStreams;
+
+    WritableSerializationDelegate<T> delegate;
+
+    public TezOutputCollector(KeyValueWriter writer, ChannelSelector<T> outputEmitter,
+                              TypeSerializer<T> serializer,
+                              int numberOfOutputStreams) {
         this.writer = writer;
+        this.outputEmitter = outputEmitter;
+        this.numberOfOutputStreams = numberOfOutputStreams;
+        this.delegate = new WritableSerializationDelegate<T>(serializer);
     }
 
     @Override
     public void collect(T record) {
-        this.delegate.setInstance(record);
         try {
-            writer.emit(this.delegate);
+            delegate.setInstance(record);
+            for (int channel : outputEmitter.selectChannels(record, numberOfOutputStreams)) {
+                IntWritable key = new IntWritable(channel);
+                writer.write(key, delegate);
+            }
         }
         catch (IOException e) {
-            throw new RuntimeException("Emitting the record caused an I/O exception: " + e.getMessage(), e);
-        }
-        catch (InterruptedException e) {
-            throw new RuntimeException("Emitting the record was interrupted: " + e.getMessage(), e);
+            e.printStackTrace();
+            System.exit(1);
         }
     }
 
     @Override
     public void close() {
-        try {
-            writer.flush();
-        } catch (IOException e) {
-            throw new RuntimeException(e.getMessage(), e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e.getMessage(), e);
-        }
     }
 }
