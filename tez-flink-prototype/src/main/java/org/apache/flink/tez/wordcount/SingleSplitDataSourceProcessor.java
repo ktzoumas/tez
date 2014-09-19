@@ -5,6 +5,7 @@ import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.core.io.InputSplit;
 import org.apache.flink.runtime.io.network.api.ChannelSelector;
+import org.apache.flink.runtime.io.network.api.RoundRobinChannelSelector;
 import org.apache.flink.runtime.operators.shipping.OutputEmitter;
 import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
 import org.apache.flink.runtime.plugable.SerializationDelegate;
@@ -33,14 +34,20 @@ public abstract class SingleSplitDataSourceProcessor<T, IS extends InputSplit> e
     @Override
     public void run() throws Exception {
 
-        int dop = this.getContext().getVertexParallelism();
-
         KeyValueWriter kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
 
-        ForwardingSelector<T> channelSelector = new ForwardingSelector<T>(this.getContext().getTaskIndex());
+        ForwardingSelector<T> channelSelector =
+                new ForwardingSelector<T>(this.getContext().getTaskIndex());
+
+        //RoundRobinChannelSelector<SerializationDelegate<T>> channelSelector =
+        //        new RoundRobinChannelSelector<SerializationDelegate<T>>();
 
         TezRecordWriter<SerializationDelegate<T>> tezRecordWriter =
-                new TezRecordWriter<SerializationDelegate<T>>(kvWriter, channelSelector);
+                new TezRecordWriter<SerializationDelegate<T>>(kvWriter,
+                        channelSelector,
+                        getContext().getVertexParallelism(),
+                        getContext().getTaskIndex());
+
 
         TezOutputCollector<T> collector = new TezOutputCollector<T>(tezRecordWriter, typeSerializer);
 

@@ -26,15 +26,11 @@ public abstract class DataSinkProcessor<T> extends SimpleProcessor {
     @Override
     public void run() throws Exception {
 
-        int dop = this.getContext().getVertexParallelism();
-
         KeyValueReader kvReader = (KeyValueReader) getInputs().values().iterator().next().getReader();
 
         ReaderIterator<T> input = new ReaderIterator<T>(
-                new MutableKeyValueReader<DeserializationDelegate<T>>(kvReader),
+                new MutableKeyValueReader<DeserializationDelegate<T>>(this, kvReader, getContext().getVertexParallelism()),
                 typeSerializer);
-
-
 
         T record = typeSerializer.createInstance();
         while ((record = input.next(record)) != null) {

@@ -22,7 +22,6 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.runtime.io.network.bufferprovider.GlobalBufferPool;
 import org.apache.flink.util.Collector;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.tez.client.TezClient;
 import org.apache.tez.dag.api.*;
 import org.apache.tez.dag.api.client.DAGClient;
@@ -38,7 +37,9 @@ import java.util.Arrays;
 
 public class WordCount {
 
-    public static int DOP = 4;
+    public static int DOP = 1;
+
+    public static int BUF_COUNTER = 0;
 
     public static int PAGE_SIZE = 32768;
 
@@ -50,9 +51,9 @@ public class WordCount {
 
     public static GlobalBufferPool GLOBAL_BUFFER_POOL;
 
-    private static String INPUT_FILE="/tmp/sherlock.txt";
+    public static String INPUT_FILE="/tmp/sherlock.txt";
 
-    private static String OUTPUT_FILE="/tmp/job_output";
+    public static String OUTPUT_FILE="/tmp/job_output";
 
     static {
         GLOBAL_BUFFER_POOL = new GlobalBufferPool(TOTAL_NETWORK_PAGES, PAGE_SIZE);
@@ -128,6 +129,27 @@ public class WordCount {
         }
     }
 
+    public static final class TextDataSink extends DataSinkProcessor<String> {
+
+        public TextDataSink(ProcessorContext context) {
+            super(context);
+        }
+
+        @Override
+        public OutputFormat<String> createOutputFormat() {
+            TextOutputFormat<String> format =
+                    new TextOutputFormat<String>(new Path(OUTPUT_FILE));
+            format.setWriteMode(FileSystem.WriteMode.OVERWRITE);
+            format.setOutputDirectoryMode(FileOutputFormat.OutputDirectoryMode.PARONLY);
+            return format;
+        }
+
+        @Override
+        public TypeSerializer<String> createTypeSerializer() {
+            return new StringSerializer();
+        }
+    }
+
     /*
     public static final class CsvDataSink extends DataSinkProcessor<Tuple2<String,Integer>> {
 
@@ -180,7 +202,6 @@ public class WordCount {
                         @Override
                         public void flatMap(String value, Collector<Tuple2<String, Integer>> out) throws Exception {
                             String[] tokens = value.toLowerCase().split("\\W+");
-
                             // emit the pairs
                             for (String token : tokens) {
                                 if (token.length() > 0) {
@@ -264,14 +285,15 @@ public class WordCount {
         }
     }
 
-    public static class ForwardPartitioner implements Partitioner {
+    public static class FlinkPartitioner implements Partitioner {
 
         @Override
         public int getPartition(Object key, Object value, int numPartitions) {
-            if (!(key instanceof LongWritable))
-                throw new RuntimeException("Keys in Flink should always be LongWritable");
-            LongWritable channel = (LongWritable) key;
-            return (int) (channel.get());
+            if (!(key instanceof PairWritable))
+                throw new RuntimeException("Keys in Flink should always be PairWritable");
+            PairWritable pair = (PairWritable) key;
+            int destChannel = (int) pair.second();
+            return destChannel;
         }
     }
 
@@ -292,12 +314,13 @@ public class WordCount {
                 ProcessorDescriptor.create (FileDataSink.class.getName()), DOP);
 
         UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
-                .newBuilder(LongWritable.class.getName(), BufferWritable.class.getName())
+                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName())
                 .setFromConfiguration(tezConf)
                 .build();
 
         UnorderedPartitionedKVEdgeConfig edgeConf2 = UnorderedPartitionedKVEdgeConfig
-                .newBuilder(LongWritable.class.getName(), BufferWritable.class.getName(), ForwardPartitioner.class.getName())
+                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName(),
+                        FlinkPartitioner.class.getName())
                 .setFromConfiguration(tezConf)
                 .setAdditionalConfiguration(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, "true")
                 .build();
@@ -337,15 +360,24 @@ public class WordCount {
                 ProcessorDescriptor.create(FileDataSink.class.getName()), DOP);
 
         UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
-                .newBuilder(LongWritable.class.getName(), BufferWritable.class.getName())
+                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName())
                 .setFromConfiguration(tezConf)
+                .build();
+
+        UnorderedPartitionedKVEdgeConfig edgeConf2 = UnorderedPartitionedKVEdgeConfig
+                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName(),
+                        FlinkPartitioner.class.getName())
+                .setFromConfiguration(tezConf)
+                .setAdditionalConfiguration(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, "true")
                 .build();
 
         EdgeProperty edgeProperty1 = edgeConf.createDefaultOneToOneEdgeProperty();
 
+        EdgeProperty edgeProperty2 = edgeConf2.createDefaultEdgeProperty();
+
         Edge edge1 = Edge.create (dataSource, tokenizer, edgeProperty1);
 
-        Edge edge3 = Edge.create (tokenizer, dataSink, edgeProperty1);
+        Edge edge3 = Edge.create (tokenizer, dataSink, edgeProperty2);
 
         DAG dag = DAG.create ("Tokenizer");
 
@@ -358,13 +390,39 @@ public class WordCount {
         return dag;
     }
 
+    public static DAG createNoOpDAG (TezConfiguration tezConf) throws Exception {
+
+        Vertex dataSource = Vertex.create("DataSource",
+                ProcessorDescriptor.create(FileSingleSplitDataSource.class.getName()), DOP);
+
+        Vertex dataSink = Vertex.create("DataSink",
+                ProcessorDescriptor.create(TextDataSink.class.getName()), DOP);
+
+        UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
+                .newBuilder(PairWritable.class.getName(), BufferWritable.class.getName())
+                .setFromConfiguration(tezConf)
+                .build();
+
+        EdgeProperty edgeProperty1 = edgeConf.createDefaultOneToOneEdgeProperty();
+
+        Edge edge1 = Edge.create (dataSource, dataSink, edgeProperty1);
+
+        DAG dag = DAG.create ("Source-Sink");
+
+        dag.addVertex(dataSource)
+                .addVertex(dataSink)
+                .addEdge(edge1);
+
+        return dag;
+    }
+
     public static void main (String [] args) {
         try {
             final TezConfiguration tezConf = new TezConfiguration();
 
             tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
             tezConf.set("fs.defaultFS", "file:///");
-            tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);;
+            tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
 
             TezClient tezClient = TezClient.create("FlinkWordCount", tezConf);
 

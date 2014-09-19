@@ -2,8 +2,6 @@ package org.apache.flink.tez.wordcount;
 
 
 import org.apache.flink.runtime.io.network.Buffer;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.tez.dag.api.client.rpc.DAGClientAMProtocolRPC;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.io.IOException;
@@ -16,13 +14,11 @@ public class TezBufferWriter {
         this.kvWriter = kvWriter;
     }
 
-    public void sendBuffer(Buffer buffer, int targetChannel) throws IOException, InterruptedException {
-        BufferWritable bufferWritable = new BufferWritable(buffer);
-        if (targetChannel == Integer.MAX_VALUE || targetChannel == Integer.MIN_VALUE) {
-            throw new IOException("Found max/min int");
-        }
-        LongWritable channel = new LongWritable((long)targetChannel);
-        kvWriter.write(channel, bufferWritable);
+    public void sendBuffer(Buffer buffer, int sourceStream, int targetStream) throws IOException, InterruptedException {
+        BufferWritable bufferWritable = new BufferWritable(buffer, WordCount.BUF_COUNTER);
+        PairWritable streamPair = new PairWritable(sourceStream, targetStream);
+        WordCount.BUF_COUNTER++;
+        kvWriter.write(streamPair, bufferWritable);
     }
 
     /*

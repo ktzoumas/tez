@@ -3,6 +3,7 @@ package org.apache.flink.tez.wordcount;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.runtime.io.network.api.ChannelSelector;
 import org.apache.flink.runtime.operators.FlatMapDriver;
 import org.apache.flink.runtime.operators.shipping.OutputEmitter;
 import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
@@ -40,14 +41,13 @@ public abstract class FlatMapProcessor<IN, OUT> extends SimpleProcessor {
     @Override
     public void run() throws Exception {
 
-        int dop = this.getContext().getVertexParallelism();
-
         taskContext.setUdf(function);
         kvReader = (KeyValueReader) getInputs().values().iterator().next().getReader();
         kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
 
         ReaderIterator<IN> readerIterator = new ReaderIterator<IN>(
-                new MutableKeyValueReader<DeserializationDelegate<IN>>(kvReader),
+                new MutableKeyValueReader<DeserializationDelegate<IN>>(this,
+                        kvReader, getContext().getVertexParallelism()),
                 inTypeSerializer
         );
         taskContext.setInput1(readerIterator, inTypeSerializer);
@@ -55,12 +55,29 @@ public abstract class FlatMapProcessor<IN, OUT> extends SimpleProcessor {
         driver = new FlatMapDriver<IN, OUT>();
         driver.setup(taskContext);
 
-        OutputEmitter<OUT> outputEmitter = new OutputEmitter<OUT>(ShipStrategyType.PARTITION_HASH,
-                outTypeComparator);
+        //OutputEmitter<OUT> outputEmitter = new OutputEmitter<OUT>(ShipStrategyType.PARTITION_HASH,
+        //        outTypeComparator);
 
+        //ForwardingSelector<OUT> channelSelector =
+        //        new ForwardingSelector<OUT>(this.getContext().getTaskIndex());
+
+        PartitioningSelector<OUT> channelSelector =
+                 new PartitioningSelector<OUT>(this.outTypeComparator);
+
+        TezRecordWriter<SerializationDelegate<OUT>> tezRecordWriter =
+                new TezRecordWriter<SerializationDelegate<OUT>>(kvWriter,
+                        channelSelector,
+                        getContext().getVertexParallelism(),
+                        getContext().getTaskIndex());
+
+        collector = new TezOutputCollector<OUT>(tezRecordWriter, outTypeSerializer);
+
+        /*
         collector = new TezOutputCollector<OUT>(
-                new TezRecordWriter<SerializationDelegate<OUT>>(kvWriter, outputEmitter),
-                outTypeSerializer);
+                new TezRecordWriter<SerializationDelegate<OUT>>(kvWriter, channelSelector,
+                        getContext().getVertexParallelism(), getContext().getTaskIndex()),
+                        outTypeSerializer);
+                        */
         taskContext.setCollector(collector);
 
 

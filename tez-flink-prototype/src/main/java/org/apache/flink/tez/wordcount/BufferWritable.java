@@ -10,9 +10,12 @@ import java.io.*;
 public class BufferWritable implements Writable {
 
     private Buffer buffer;
+    private int seq;
 
-    public BufferWritable(Buffer buffer) {
+    public BufferWritable(Buffer buffer, int seq) {
         this.buffer = buffer;
+        this.seq = seq;
+
     }
 
     public BufferWritable() {
@@ -25,6 +28,7 @@ public class BufferWritable implements Writable {
 
     @Override
     public void write(DataOutput out) throws IOException {
+        out.writeInt(seq);
         out.writeInt(buffer.size());
         MemorySegment memorySegment = buffer.getMemorySegment();
         out.writeInt(memorySegment.size());
@@ -35,6 +39,7 @@ public class BufferWritable implements Writable {
 
     @Override
     public void readFields(DataInput in) throws IOException {
+        seq = in.readInt();
         int bufSize = in.readInt();
         int memSize = in.readInt();
         byte [] memory = new byte [memSize];
@@ -48,7 +53,7 @@ public class BufferWritable implements Writable {
         byte [] b = s.getBytes();
         MemorySegment mem = new MemorySegment(b);
         Buffer buf = new Buffer (mem, mem.size(), null);
-        BufferWritable bw = new BufferWritable(buf);
+        BufferWritable bw = new BufferWritable(buf, 1);
         try {
             DataOutputStream dos = new DataOutputStream(new FileOutputStream("/tmp/serde_test"));
             bw.write(dos);

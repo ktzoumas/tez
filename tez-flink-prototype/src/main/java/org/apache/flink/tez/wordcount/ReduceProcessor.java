@@ -5,15 +5,11 @@ import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerFactory;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
-import org.apache.flink.runtime.io.network.api.ChannelSelector;
 import org.apache.flink.runtime.memorymanager.DefaultMemoryManager;
 import org.apache.flink.runtime.memorymanager.MemoryManager;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.ReduceDriver;
-import org.apache.flink.runtime.operators.shipping.OutputEmitter;
-import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
 import org.apache.flink.runtime.operators.sort.UnilateralSortMerger;
 import org.apache.flink.runtime.operators.util.ReaderIterator;
 import org.apache.flink.runtime.plugable.DeserializationDelegate;
@@ -79,7 +75,8 @@ public abstract class ReduceProcessor<T> extends SimpleProcessor {
         kvWriter = (KeyValueWriter) getOutputs().values().iterator().next().getWriter();
 
         ReaderIterator<T> readerIterator = new ReaderIterator<T>(
-                new MutableKeyValueReader<DeserializationDelegate<T>>(kvReader),
+                new MutableKeyValueReader<DeserializationDelegate<T>>(this, kvReader,
+                        this.getContext().getVertexParallelism()),
                 typeSerializer
         );
 
@@ -101,7 +98,6 @@ public abstract class ReduceProcessor<T> extends SimpleProcessor {
 
         MutableObjectIterator<T> sortedIterator = sorter.getIterator();
 
-
         taskContext.setInput1(sortedIterator, typeSerializer);
         taskContext.getTaskConfig().setDriverStrategy(DriverStrategy.SORTED_REDUCE);
 
@@ -111,10 +107,12 @@ public abstract class ReduceProcessor<T> extends SimpleProcessor {
         //OutputEmitter<T> outputEmitter = new OutputEmitter<T>(ShipStrategyType.FORWARD,
         //        comparator);
 
-        ForwardingSelector<T> channelSelector = new ForwardingSelector<T>(this.getContext().getTaskIndex());
+        ForwardingSelector<T> channelSelector =
+                new ForwardingSelector<T>(this.getContext().getTaskIndex());
 
         collector = new TezOutputCollector<T>(
-                new TezRecordWriter<SerializationDelegate<T>>(kvWriter, channelSelector), typeSerializer);
+                new TezRecordWriter<SerializationDelegate<T>>(kvWriter, channelSelector,
+                        getContext().getVertexParallelism(), getContext().getTaskVertexIndex()), typeSerializer);
         taskContext.setCollector(collector);
 
         try {
