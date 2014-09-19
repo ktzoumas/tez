@@ -1,24 +1,16 @@
 package org.apache.flink.tez.wordcount;
 
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.flink.core.io.IOReadableWritable;
-import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.Buffer;
 import org.apache.flink.runtime.io.network.api.ChannelSelector;
-import org.apache.flink.runtime.io.network.api.RoundRobinChannelSelector;
 import org.apache.flink.runtime.io.network.bufferprovider.BufferProvider;
-import org.apache.flink.runtime.io.network.bufferprovider.GlobalBufferPool;
 import org.apache.flink.runtime.io.network.bufferprovider.LocalBufferPool;
 import org.apache.flink.runtime.io.network.serialization.RecordSerializer;
 import org.apache.flink.runtime.io.network.serialization.SpanningRecordSerializer;
-import org.apache.flink.runtime.operators.shipping.OutputEmitter;
-import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.io.IOException;
-import java.nio.channels.Channel;
 
 /*
  * Same logic as org.apache.flink.runtime.io.network.api.RecordWriter
@@ -31,17 +23,21 @@ public class TezRecordWriter<T extends IOReadableWritable> extends TezBufferWrit
 
     private RecordSerializer<T>[] serializers;
 
-    private int numChannels = WordCount.DOP;
+    private int numberOfOutputStreams;
+
+    private int indexOfSourceStream;
 
     private ChannelSelector<T> channelSelector;
 
 
-    public TezRecordWriter(KeyValueWriter writer, ChannelSelector<T> channelSelector) {
+    public TezRecordWriter(KeyValueWriter writer, ChannelSelector<T> channelSelector, int numberOfOutputStreams, int indexOfSourceStream) {
         super(writer);
-        //this.bufferPool = new LocalBufferPool(new GlobalBufferPool(10, 3), 10);
-        this.serializers = new RecordSerializer [this.numChannels];
-        for (int i = 0; i < this.numChannels; i++)
+        this.numberOfOutputStreams = numberOfOutputStreams;
+        this.indexOfSourceStream = indexOfSourceStream;
+        this.serializers = new RecordSerializer [this.numberOfOutputStreams];
+        for (int i = 0; i < this.numberOfOutputStreams; i++) {
             this.serializers[i] = new SpanningRecordSerializer<T>();
+        }
         this.channelSelector = channelSelector;
         this.bufferPool = new LocalBufferPool(WordCount.GLOBAL_BUFFER_POOL, WordCount.TASK_NETWORK_PAGES);
     }
@@ -54,7 +50,7 @@ public class TezRecordWriter<T extends IOReadableWritable> extends TezBufferWrit
     }
 
     public void emit(final T record) throws IOException, InterruptedException {
-        for (int targetChannel : this.channelSelector.selectChannels(record, this.numChannels)) {
+        for (int targetChannel : this.channelSelector.selectChannels(record, this.numberOfOutputStreams)) {
             RecordSerializer<T> serializer = this.serializers[targetChannel];
 
             RecordSerializer.SerializationResult result = serializer.addRecord(record);
@@ -62,7 +58,7 @@ public class TezRecordWriter<T extends IOReadableWritable> extends TezBufferWrit
                 Buffer buffer = serializer.getCurrentBuffer();
 
                 if ((buffer != null) && (buffer.size() > 0)) {
-                    sendBuffer(buffer, targetChannel);
+                    sendBuffer(buffer, indexOfSourceStream, targetChannel);
                 }
 
 
@@ -79,13 +75,13 @@ public class TezRecordWriter<T extends IOReadableWritable> extends TezBufferWrit
     }
 
     public void flush() throws IOException, InterruptedException {
-        for (int targetChannel  = 0; targetChannel < this.numChannels; targetChannel ++) {
+        for (int targetChannel  = 0; targetChannel < this.numberOfOutputStreams; targetChannel ++) {
             RecordSerializer<T> serializer = this.serializers[targetChannel];
 
             Buffer buffer = serializer.getCurrentBuffer();
 
             if ((buffer != null) && (buffer.size() > 0)) {
-                sendBuffer(buffer, targetChannel);
+                sendBuffer(buffer, indexOfSourceStream, targetChannel);
             }
             serializer.clear();
         }
