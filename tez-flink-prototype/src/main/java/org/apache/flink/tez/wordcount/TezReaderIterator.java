@@ -20,12 +20,15 @@ public class TezReaderIterator<T> implements MutableObjectIterator<T>{
         if (kvReader.next()) {
             Object key = kvReader.getCurrentKey();
             Object value = kvReader.getCurrentValue();
-            if (!(key instanceof IntWritable && value instanceof WritableSerializationDelegate)) {
-                throw new IllegalStateException("Wrong key/value type");
+            if (!(key instanceof IntWritable)) {
+                throw new IllegalStateException("Wrong key type");
             }
-            WritableSerializationDelegate<T> delegate = (WritableSerializationDelegate<T>) value;
-            reuse = delegate.getInstance();
+            reuse = (T) value;
             return reuse;
+
+            //WritableSerializationDelegate<T> delegate = (WritableSerializationDelegate<T>) value;
+            //reuse = delegate.getInstance();
+            //return reuse;
         }
         else {
             return null;

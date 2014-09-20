@@ -149,7 +149,7 @@ public class FlinkUnorderedKVInput extends AbstractLogicalInput {
 
             TypeSerializer<?> typeSerializer = null;
             try {
-                typeSerializer = (TypeSerializer<?>) InstantiationUtil.readObjectFromConfig(conf.get("FLINK_DESERIALIZER"), getClass().getClassLoader());
+                typeSerializer = (TypeSerializer<?>) InstantiationUtil.readObjectFromConfig(conf.get("io.flink.typeserializer"), getClass().getClassLoader());
             }
             catch (Exception e) {
                 throw new RuntimeException("Cannot find type serializer in conf");

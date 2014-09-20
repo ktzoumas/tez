@@ -307,7 +307,7 @@ public class WordCount {
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
                 .setFromConfiguration(tezConf)
                 .configureInput()
-                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
                         new StringSerializer()
                 )))
                 .done()
@@ -319,7 +319,7 @@ public class WordCount {
                 .setFromConfiguration(tezConf)
                 .setAdditionalConfiguration(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, "true")
                 .configureInput()
-                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
                         new TupleSerializer<Tuple2<String, Integer>>(
                                 (Class<Tuple2<String, Integer>>) (Class<?>) Tuple2.class,
                                 new TypeSerializer[]{
@@ -337,7 +337,7 @@ public class WordCount {
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
                 .setFromConfiguration(tezConf)
                 .configureInput()
-                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                .setAdditionalConfiguration("io.flink.typeserializerER", InstantiationUtil.writeObjectToConfig(
                 new TupleSerializer<Tuple2<String, Integer>>(
                         (Class<Tuple2<String, Integer>>) (Class<?>) Tuple2.class,
                         new TypeSerializer[]{
