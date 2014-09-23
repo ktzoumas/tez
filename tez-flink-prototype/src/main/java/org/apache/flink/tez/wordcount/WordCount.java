@@ -36,7 +36,7 @@ import org.apache.tez.runtime.library.conf.UnorderedPartitionedKVEdgeConfig;
 import java.util.Arrays;
 
 
-public class WordCount {
+public class WordCount extends ProgramLauncher {
 
     public static int DOP = 4;
 
@@ -52,7 +52,7 @@ public class WordCount {
 
     public static GlobalBufferPool GLOBAL_BUFFER_POOL;
 
-    public static String INPUT_FILE="/tmp/sherlock.txt";
+    public static String INPUT_FILE="/tmp/hamlet.txt";
 
     public static String OUTPUT_FILE="/tmp/job_output";
 
@@ -305,7 +305,7 @@ public class WordCount {
 
         FlinkUnorderedKVEdgeConfig srcMapEdgeConf = (FlinkUnorderedKVEdgeConfig) (FlinkUnorderedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
-                .setFromConfiguration(tezConf)
+                //.setFromConfiguration(tezConf)
                 .configureInput()
                 .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
                         new StringSerializer()
@@ -316,7 +316,7 @@ public class WordCount {
         FlinkUnorderedPartitionedKVEdgeConfig mapReduceEdgeConf = (FlinkUnorderedPartitionedKVEdgeConfig) (FlinkUnorderedPartitionedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName(),
                         SimplePartitioner.class.getName())
-                .setFromConfiguration(tezConf)
+                //.setFromConfiguration(tezConf)
                 .setAdditionalConfiguration(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, "true")
                 .configureInput()
                 .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
@@ -335,9 +335,9 @@ public class WordCount {
 
         FlinkUnorderedKVEdgeConfig reduceSinkConf = (FlinkUnorderedKVEdgeConfig) (FlinkUnorderedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
-                .setFromConfiguration(tezConf)
+                //.setFromConfiguration(tezConf)
                 .configureInput()
-                .setAdditionalConfiguration("io.flink.typeserializerER", InstantiationUtil.writeObjectToConfig(
+                .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
                 new TupleSerializer<Tuple2<String, Integer>>(
                         (Class<Tuple2<String, Integer>>) (Class<?>) Tuple2.class,
                         new TypeSerializer[]{
@@ -389,7 +389,7 @@ public class WordCount {
         UnorderedKVEdgeConfig edgeConf = UnorderedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
                 .setFromConfiguration(tezConf)
-                .setAdditionalConfiguration("FLINK_DESERIALIZER", InstantiationUtil.writeObjectToConfig(
+                .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
                         new StringSerializer()
                 ))
                 .build();
@@ -450,9 +450,9 @@ public class WordCount {
         try {
             final TezConfiguration tezConf = new TezConfiguration();
 
-            tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
-            tezConf.set("fs.defaultFS", "file:///");
-            tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
+            //tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
+            //tezConf.set("fs.defaultFS", "file:///");
+            //tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
 
             TezClient tezClient = TezClient.create("FlinkWordCount", tezConf);
 
