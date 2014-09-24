@@ -52,9 +52,9 @@ public class WordCount extends ProgramLauncher {
 
     public static GlobalBufferPool GLOBAL_BUFFER_POOL;
 
-    public static String INPUT_FILE="/tmp/hamlet.txt";
+    public static String INPUT_FILE="hdfs://localhost:9000/tmp/hamlet.txt";
 
-    public static String OUTPUT_FILE="/tmp/job_output";
+    public static String OUTPUT_FILE="hdfs://localhost:9000/tmp/job_output4";
 
     static {
         GLOBAL_BUFFER_POOL = new GlobalBufferPool(TOTAL_NETWORK_PAGES, PAGE_SIZE);
@@ -287,8 +287,8 @@ public class WordCount extends ProgramLauncher {
     }
 
 
-
-    public static DAG createDAG (TezConfiguration tezConf) throws Exception {
+    @Override
+    public DAG createDAG (TezConfiguration tezConf) throws Exception {
 
 
         Vertex dataSource = Vertex.create("DataSource",
@@ -305,7 +305,7 @@ public class WordCount extends ProgramLauncher {
 
         FlinkUnorderedKVEdgeConfig srcMapEdgeConf = (FlinkUnorderedKVEdgeConfig) (FlinkUnorderedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
-                //.setFromConfiguration(tezConf)
+                .setFromConfiguration(tezConf)
                 .configureInput()
                 .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
                         new StringSerializer()
@@ -316,7 +316,7 @@ public class WordCount extends ProgramLauncher {
         FlinkUnorderedPartitionedKVEdgeConfig mapReduceEdgeConf = (FlinkUnorderedPartitionedKVEdgeConfig) (FlinkUnorderedPartitionedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName(),
                         SimplePartitioner.class.getName())
-                //.setFromConfiguration(tezConf)
+                .setFromConfiguration(tezConf)
                 .setAdditionalConfiguration(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, "true")
                 .configureInput()
                 .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
@@ -335,7 +335,7 @@ public class WordCount extends ProgramLauncher {
 
         FlinkUnorderedKVEdgeConfig reduceSinkConf = (FlinkUnorderedKVEdgeConfig) (FlinkUnorderedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
-                //.setFromConfiguration(tezConf)
+                .setFromConfiguration(tezConf)
                 .configureInput()
                 .setAdditionalConfiguration("io.flink.typeserializer", InstantiationUtil.writeObjectToConfig(
                 new TupleSerializer<Tuple2<String, Integer>>(
@@ -446,45 +446,12 @@ public class WordCount extends ProgramLauncher {
         return dag;
     }
 
+    public WordCount() {
+        super("FlinkWordCount");
+    }
+
     public static void main (String [] args) {
-        try {
-            final TezConfiguration tezConf = new TezConfiguration();
-
-            //tezConf.setBoolean(TezConfiguration.TEZ_LOCAL_MODE, true);
-            //tezConf.set("fs.defaultFS", "file:///");
-            //tezConf.setBoolean(TezRuntimeConfiguration.TEZ_RUNTIME_OPTIMIZE_LOCAL_FETCH, true);
-
-            TezClient tezClient = TezClient.create("FlinkWordCount", tezConf);
-
-            tezClient.start();
-
-            try {
-                DAG dag = createDAG(tezConf);
-
-                tezClient.waitTillReady();
-                System.out.println("Submitting DAG to Tez Client");
-                DAGClient dagClient = tezClient.submitDAG(dag);
-                System.out.println("Submitted DAG to Tez Client");
-
-                // monitoring
-                DAGStatus dagStatus = dagClient.waitForCompletion();
-
-                if (dagStatus.getState() != DAGStatus.State.SUCCEEDED) {
-                    System.out.println("FlinkWordCount failed with diagnostics: " + dagStatus.getDiagnostics());
-                    System.exit(1);
-                }
-                System.out.println("FlinkWordCount finished successfully");
-                System.exit(0);
-            } catch (Exception e) {
-                e.printStackTrace();
-            } finally {
-                tezClient.stop();
-            }
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-            System.exit(1);
-        }
+        new WordCount().runLocal();
     }
 
 }

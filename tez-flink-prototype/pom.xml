@@ -22,6 +22,10 @@
                     <groupId>org.slf4j</groupId>
                     <artifactId>log4j-over-slf4j</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava-io</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -37,6 +41,10 @@
                     <groupId>org.slf4j</groupId>
                     <artifactId>log4j-over-slf4j</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava-io</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -51,6 +59,10 @@
                 <exclusion>
                     <groupId>org.slf4j</groupId>
                     <artifactId>log4j-over-slf4j</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava-io</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
