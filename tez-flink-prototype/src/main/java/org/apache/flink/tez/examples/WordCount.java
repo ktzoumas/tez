@@ -1,4 +1,4 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.examples;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
@@ -21,16 +21,13 @@ import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.runtime.io.network.bufferprovider.GlobalBufferPool;
+import org.apache.flink.tez.wordcount.*;
 import org.apache.flink.util.Collector;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.tez.client.TezClient;
 import org.apache.tez.dag.api.*;
-import org.apache.tez.dag.api.client.DAGClient;
-import org.apache.tez.dag.api.client.DAGStatus;
 import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfig;
-import org.apache.tez.runtime.library.conf.UnorderedKVInputConfig;
 import org.apache.tez.runtime.library.conf.UnorderedPartitionedKVEdgeConfig;
 
 import java.util.Arrays;
@@ -52,9 +49,13 @@ public class WordCount extends ProgramLauncher {
 
     public static GlobalBufferPool GLOBAL_BUFFER_POOL;
 
-    public static String INPUT_FILE="hdfs://localhost:9000/tmp/hamlet.txt";
+    //public static String INPUT_FILE="hdfs://localhost:9000/tmp/hamlet.txt";
 
-    public static String OUTPUT_FILE="hdfs://localhost:9000/tmp/job_output4";
+    //public static String OUTPUT_FILE="hdfs://localhost:9000/tmp/job_output4";
+
+    public static String INPUT_FILE="/tmp/hamlet.txt";
+
+    public static String OUTPUT_FILE="/tmp/job_output5";
 
     static {
         GLOBAL_BUFFER_POOL = new GlobalBufferPool(TOTAL_NETWORK_PAGES, PAGE_SIZE);

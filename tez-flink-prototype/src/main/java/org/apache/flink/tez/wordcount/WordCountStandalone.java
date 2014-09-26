@@ -1,11 +1,10 @@
 package org.apache.flink.tez.wordcount;
 
 
+import org.apache.flink.tez.examples.WordCount;
+
 import java.io.*;
-import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.Set;
 
 public class WordCountStandalone {

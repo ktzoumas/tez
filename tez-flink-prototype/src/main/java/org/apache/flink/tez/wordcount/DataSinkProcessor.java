@@ -2,8 +2,7 @@ package org.apache.flink.tez.wordcount;
 
 import org.apache.flink.api.common.io.OutputFormat;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.runtime.operators.util.ReaderIterator;
-import org.apache.flink.runtime.plugable.DeserializationDelegate;
+import org.apache.flink.tez.examples.WordCount;
 import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;

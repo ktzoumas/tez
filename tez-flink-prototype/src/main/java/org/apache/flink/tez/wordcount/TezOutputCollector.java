@@ -2,8 +2,6 @@ package org.apache.flink.tez.wordcount;
 
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.runtime.operators.shipping.OutputEmitter;
-import org.apache.flink.runtime.plugable.SerializationDelegate;
 import org.apache.flink.util.Collector;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.tez.runtime.library.api.KeyValueWriter;

@@ -1,6 +1,8 @@
 package org.apache.flink.tez.wordcount;
 
-public interface ChannelSelector<T> {
+import java.io.Serializable;
+
+public interface ChannelSelector<T> extends Serializable {
 
     /**
      * Called to determine to which attached {@link org.apache.flink.runtime.io.network.channels.OutputChannel} objects the given record shall be forwarded.
