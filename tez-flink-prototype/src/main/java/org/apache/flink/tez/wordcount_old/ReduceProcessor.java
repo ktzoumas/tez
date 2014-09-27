@@ -1,4 +1,4 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.wordcount_old;
 
 
 import org.apache.flink.api.common.functions.ReduceFunction;
@@ -12,6 +12,9 @@ import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.ReduceDriver;
 import org.apache.flink.runtime.operators.sort.UnilateralSortMerger;
 import org.apache.flink.tez.examples.WordCount;
+import org.apache.flink.tez.runtime.DummyInvokable;
+import org.apache.flink.tez.runtime.TezOutputCollector;
+import org.apache.flink.tez.runtime.TezReaderIterator;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.MutableObjectIterator;
 import org.apache.tez.runtime.api.ProcessorContext;

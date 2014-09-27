@@ -1,4 +1,4 @@
-package org.apache.flink.tez.processor;
+package org.apache.flink.tez.runtime;
 
 
 import org.apache.flink.configuration.Configuration;

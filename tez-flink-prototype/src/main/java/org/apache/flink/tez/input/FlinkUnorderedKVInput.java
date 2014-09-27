@@ -17,12 +17,13 @@
  */
 
 
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.input;
 
 import com.google.common.base.Preconditions;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.tez.util.InstantiationUtil;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.compress.CompressionCodec;
@@ -40,7 +41,6 @@ import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 import org.apache.tez.runtime.library.common.ConfigUtils;
 import org.apache.tez.runtime.library.common.MemoryUpdateCallbackHandler;
-import org.apache.tez.runtime.library.common.readers.UnorderedKVReader;
 import org.apache.tez.runtime.library.shuffle.common.ShuffleEventHandler;
 import org.apache.tez.runtime.library.shuffle.common.impl.ShuffleInputEventHandlerImpl;
 import org.apache.tez.runtime.library.shuffle.common.impl.ShuffleManager;

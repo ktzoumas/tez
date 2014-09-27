@@ -12,8 +12,6 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
 import org.apache.flink.api.common.typeutils.base.StringComparator;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
-import org.apache.flink.api.java.io.CollectionInputFormat;
-import org.apache.flink.api.java.io.PrintingOutputFormat;
 import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.api.java.io.TextOutputFormat;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -25,14 +23,22 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
-import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.FlatMapDriver;
 import org.apache.flink.runtime.operators.ReduceDriver;
 import org.apache.flink.runtime.operators.util.LocalStrategy;
 import org.apache.flink.runtime.operators.util.TaskConfig;
-import org.apache.flink.tez.processor.FlinkProcessor;
-import org.apache.flink.tez.wordcount.*;
+import org.apache.flink.tez.input.FlinkUnorderedKVEdgeConfig;
+import org.apache.flink.tez.input.FlinkUnorderedPartitionedKVEdgeConfig;
+import org.apache.flink.tez.input.WritableSerializationDelegate;
+import org.apache.flink.tez.runtime.ChannelSelector;
+import org.apache.flink.tez.runtime.DataSinkProcessor;
+import org.apache.flink.tez.runtime.FlinkProcessor;
+import org.apache.flink.tez.runtime.PartitioningSelector;
+import org.apache.flink.tez.runtime.RoundRobinSelector;
+import org.apache.flink.tez.runtime.SingleSplitDataSourceProcessor;
+import org.apache.flink.tez.util.InstantiationUtil;
+import org.apache.flink.tez.wordcount_old.*;
 import org.apache.flink.util.Collector;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.tez.common.TezUtils;
@@ -40,15 +46,13 @@ import org.apache.tez.dag.api.*;
 import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 
-import java.util.Arrays;
-
 public class BuildingWordCount2 extends ProgramLauncher {
 
-    private static int DOP = 4;
+    private static int DOP = 8;
 
     public static String INPUT_FILE="/tmp/sherlock.txt";
 
-    public static String OUTPUT_FILE="/tmp/job_output6";
+    public static String OUTPUT_FILE="/tmp/job_output11";
 
     public static StringSerializer stringSerializer = new StringSerializer();
 
@@ -144,7 +148,7 @@ public class BuildingWordCount2 extends ProgramLauncher {
     }
 
     public static void main (String [] args) {
-        new BuildingWordCount2().runYarn();
+        new BuildingWordCount2().runLocal();
     }
 
     private Vertex createVertex (String name, org.apache.hadoop.conf.Configuration conf, TaskConfig taskConfig, int numberOfSubTaskInOutput, ChannelSelector channelSelector) throws Exception {

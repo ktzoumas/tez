@@ -1,9 +1,7 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.input;
 
-import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.tez.runtime.library.conf.*;
 
-import javax.annotation.Nullable;
 import java.util.Map;
 
 /**

@@ -18,27 +18,12 @@
  *
  */
 
-package org.apache.flink.tez.wordcount;
-
-import javax.annotation.Nullable;
-
-import java.util.Map;
-
-import com.google.common.base.Preconditions;
+package org.apache.flink.tez.input;
 
 import org.apache.hadoop.classification.InterfaceAudience;
-import org.apache.hadoop.classification.InterfaceStability;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.tez.dag.api.EdgeManagerPluginDescriptor;
-import org.apache.tez.dag.api.EdgeProperty;
-import org.apache.tez.dag.api.InputDescriptor;
-import org.apache.tez.dag.api.OutputDescriptor;
-import org.apache.tez.dag.api.UserPayload;
 import org.apache.tez.runtime.library.conf.UnorderedKVEdgeConfig;
 import org.apache.tez.runtime.library.conf.UnorderedKVInputConfig;
 import org.apache.tez.runtime.library.conf.UnorderedKVOutputConfig;
-import org.apache.tez.runtime.library.input.UnorderedKVInput;
-import org.apache.tez.runtime.library.output.UnorderedKVOutput;
 
 
 public class FlinkUnorderedKVEdgeConfig extends UnorderedKVEdgeConfig {

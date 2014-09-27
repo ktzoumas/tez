@@ -1,4 +1,4 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.input;
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.core.memory.DataInputView;

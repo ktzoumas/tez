@@ -1,4 +1,4 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.wordcount_old;
 
 import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.common.typeutils.TypeComparator;
@@ -13,6 +13,7 @@ import org.apache.flink.runtime.memorymanager.MemoryManager;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.PactTaskContext;
 import org.apache.flink.runtime.operators.util.TaskConfig;
+import org.apache.flink.tez.runtime.DummyInvokable;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.MutableObjectIterator;
 

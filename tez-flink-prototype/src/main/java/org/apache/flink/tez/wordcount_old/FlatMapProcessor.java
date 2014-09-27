@@ -1,15 +1,12 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.wordcount_old;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.runtime.io.network.api.ChannelSelector;
 import org.apache.flink.runtime.operators.FlatMapDriver;
-import org.apache.flink.runtime.operators.shipping.OutputEmitter;
-import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
-import org.apache.flink.runtime.operators.util.ReaderIterator;
-import org.apache.flink.runtime.plugable.DeserializationDelegate;
-import org.apache.flink.runtime.plugable.SerializationDelegate;
+import org.apache.flink.tez.runtime.PartitioningSelector;
+import org.apache.flink.tez.runtime.TezOutputCollector;
+import org.apache.flink.tez.runtime.TezReaderIterator;
 import org.apache.flink.util.Collector;
 import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.KeyValueReader;

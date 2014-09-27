@@ -1,8 +1,7 @@
-package org.apache.flink.tez.processor;
+package org.apache.flink.tez.runtime;
 
 
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
-import org.apache.flink.runtime.io.network.bufferprovider.LocalBufferPool;
 import org.apache.flink.runtime.memorymanager.DefaultMemoryManager;
 import org.apache.flink.runtime.memorymanager.MemoryManager;
 

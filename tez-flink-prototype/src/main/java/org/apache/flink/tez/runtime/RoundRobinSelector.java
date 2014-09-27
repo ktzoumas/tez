@@ -1,4 +1,4 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.runtime;
 
 
 public class RoundRobinSelector<T> implements ChannelSelector<T> {

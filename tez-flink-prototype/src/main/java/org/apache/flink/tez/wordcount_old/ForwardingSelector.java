@@ -1,7 +1,9 @@
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.wordcount_old;
 
 
 // Forwards to the sub-task with the same index
+
+import org.apache.flink.tez.runtime.ChannelSelector;
 
 public class ForwardingSelector<T> implements ChannelSelector<T> {
 

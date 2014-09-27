@@ -21,7 +21,13 @@ import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.GenericInputSplit;
 import org.apache.flink.runtime.io.network.bufferprovider.GlobalBufferPool;
-import org.apache.flink.tez.wordcount.*;
+import org.apache.flink.tez.input.FlinkUnorderedKVEdgeConfig;
+import org.apache.flink.tez.input.FlinkUnorderedPartitionedKVEdgeConfig;
+import org.apache.flink.tez.input.WritableSerializationDelegate;
+import org.apache.flink.tez.runtime.DataSinkProcessor;
+import org.apache.flink.tez.runtime.SingleSplitDataSourceProcessor;
+import org.apache.flink.tez.util.InstantiationUtil;
+import org.apache.flink.tez.wordcount_old.*;
 import org.apache.flink.util.Collector;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.tez.dag.api.*;
@@ -53,9 +59,9 @@ public class WordCount extends ProgramLauncher {
 
     //public static String OUTPUT_FILE="hdfs://localhost:9000/tmp/job_output4";
 
-    public static String INPUT_FILE="/tmp/hamlet.txt";
+    public static String INPUT_FILE="hdfs://localhost:9000/tmp/hamlet.txt";
 
-    public static String OUTPUT_FILE="/tmp/job_output5";
+    public static String OUTPUT_FILE="hdfs://localhost:9000/tmp/job_output8";
 
     static {
         GLOBAL_BUFFER_POOL = new GlobalBufferPool(TOTAL_NETWORK_PAGES, PAGE_SIZE);
@@ -452,7 +458,7 @@ public class WordCount extends ProgramLauncher {
     }
 
     public static void main (String [] args) {
-        new WordCount().runLocal();
+        new WordCount().runYarn();
     }
 
 }

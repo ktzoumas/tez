@@ -17,9 +17,7 @@
  */
 
 
-package org.apache.flink.tez.wordcount;
-
-import com.google.common.io.BaseEncoding;
+package org.apache.flink.tez.util;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -229,17 +227,17 @@ public class InstantiationUtil {
         if (encoded == null) {
             return null;
         }
-        byte [] bytes = BaseEncoding.base64().decode(encoded);
-        //Base64.Decoder decoder = Base64.getDecoder();
-        //byte [] bytes = decoder.decode(encoded);
+        //byte [] bytes = BaseEncoding.base64().decode(encoded);
+        Base64.Decoder decoder = Base64.getDecoder();
+        byte [] bytes = decoder.decode(encoded);
         return deserializeObject(bytes, cl);
     }
 
     public static String writeObjectToConfig(Object o) throws IOException {
         byte[] bytes = serializeObject(o);
-        String encoded = BaseEncoding.base64().encode(bytes);
-        //Base64.Encoder encoder = Base64.getEncoder();
-        //String encoded = encoder.encodeToString(bytes);
+        //String encoded = BaseEncoding.base64().encode(bytes);
+        Base64.Encoder encoder = Base64.getEncoder();
+        String encoded = encoder.encodeToString(bytes);
         return encoded;
     }
 

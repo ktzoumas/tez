@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.tez.wordcount;
+package org.apache.flink.tez.input;
 
 import java.io.IOException;
 

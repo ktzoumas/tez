@@ -67,6 +67,25 @@
             </exclusions>
         </dependency>
         <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-compiler</artifactId>
+            <version>0.7-hadoop2-incubating-SNAPSHOT</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>log4j-over-slf4j</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava-io</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <groupId>org.apache.tez</groupId>
             <artifactId>tez-api</artifactId>
             <version>${project.version}</version>
@@ -91,6 +110,7 @@
             <artifactId>tez-runtime-library</artifactId>
             <version>${project.version}</version>
         </dependency>
+
     </dependencies>
 
     <repositories>

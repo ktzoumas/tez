@@ -1,11 +1,9 @@
-package org.apache.flink.tez.processor;
+package org.apache.flink.tez.runtime;
 
 import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.runtime.operators.udf.RuntimeUDFContext;
 import org.apache.flink.runtime.operators.util.TaskConfig;
-import org.apache.flink.tez.wordcount.ChannelSelector;
-import org.apache.flink.tez.wordcount.ForwardingSelector;
-import org.apache.flink.tez.wordcount.InstantiationUtil;
+import org.apache.flink.tez.util.InstantiationUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.tez.common.TezUtils;
 import org.apache.tez.dag.api.UserPayload;

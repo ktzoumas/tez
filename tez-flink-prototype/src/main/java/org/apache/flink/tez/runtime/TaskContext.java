@@ -1,4 +1,4 @@
-package org.apache.flink.tez.processor;
+package org.apache.flink.tez.runtime;
 
 import com.google.common.base.Preconditions;
 import org.apache.commons.logging.Log;
@@ -11,7 +11,6 @@ import org.apache.flink.api.common.typeutils.TypeComparatorFactory;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerFactory;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.runtime.memorymanager.MemoryManager;
@@ -23,14 +22,13 @@ import org.apache.flink.runtime.operators.udf.RuntimeUDFContext;
 import org.apache.flink.runtime.operators.util.CloseableInputProvider;
 import org.apache.flink.runtime.operators.util.LocalStrategy;
 import org.apache.flink.runtime.operators.util.TaskConfig;
-import org.apache.flink.tez.wordcount.*;
+import org.apache.flink.tez.util.InstantiationUtil;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.MutableObjectIterator;
 import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 
 
@@ -133,7 +131,7 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
         this.taskName = this.config.getTaskName();
         this.numberOfSubtasks = this.runtimeUdfContext.getNumberOfParallelSubtasks();
         this.indexInSubtaskGroup = this.runtimeUdfContext.getIndexOfThisSubtask();
-        this.runtimeEnvironment = new TezRuntimeEnvironment(1024, 32768);
+        this.runtimeEnvironment = new TezRuntimeEnvironment(512, 32768);
     }
 
     //-------------------------------------------------------------

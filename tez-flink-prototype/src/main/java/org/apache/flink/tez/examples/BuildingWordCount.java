@@ -2,6 +2,7 @@ package org.apache.flink.tez.examples;
 
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.io.FileOutputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.io.OutputFormat;
 import org.apache.flink.api.common.typeutils.TypeComparator;
@@ -9,13 +10,20 @@ import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
 import org.apache.flink.api.common.typeutils.base.StringComparator;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
-import org.apache.flink.api.java.io.CollectionInputFormat;
-import org.apache.flink.api.java.io.PrintingOutputFormat;
+import org.apache.flink.api.java.io.TextInputFormat;
+import org.apache.flink.api.java.io.TextOutputFormat;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.typeutils.runtime.TupleComparator;
 import org.apache.flink.api.java.typeutils.runtime.TupleSerializer;
-import org.apache.flink.core.io.GenericInputSplit;
-import org.apache.flink.tez.wordcount.*;
+import org.apache.flink.core.fs.FileInputSplit;
+import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.tez.input.FlinkUnorderedKVEdgeConfig;
+import org.apache.flink.tez.input.WritableSerializationDelegate;
+import org.apache.flink.tez.runtime.DataSinkProcessor;
+import org.apache.flink.tez.runtime.SingleSplitDataSourceProcessor;
+import org.apache.flink.tez.util.InstantiationUtil;
+import org.apache.flink.tez.wordcount_old.*;
 import org.apache.flink.util.Collector;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.IntWritable;
@@ -23,9 +31,11 @@ import org.apache.tez.common.TezUtils;
 import org.apache.tez.dag.api.*;
 import org.apache.tez.runtime.api.ProcessorContext;
 
-import java.util.Arrays;
-
 public class BuildingWordCount extends ProgramLauncher {
+
+    public static String INPUT_FILE="hdfs://localhost:9000/tmp/sherlock.txt";
+
+    public static String OUTPUT_FILE="hdfs://localhost:9000/tmp/job_output9";
 
     private static FlatMapFunction<String, Tuple2<String, Integer>> udf =
             new FlatMapFunction<String, Tuple2<String, Integer>>() {
@@ -49,18 +59,44 @@ public class BuildingWordCount extends ProgramLauncher {
     }
 
     public static void main (String [] args) {
-        new BuildingWordCount().runLocal();
+        new BuildingWordCount().runYarn();
     }
 
-    public static final class PrintingDataSink extends DataSinkProcessor<Tuple2<String,Integer>> {
+    public static final class FileSingleSplitDataSource extends SingleSplitDataSourceProcessor<String, FileInputSplit> {
 
-        public PrintingDataSink(ProcessorContext context) {
+        public FileSingleSplitDataSource(ProcessorContext context) {
+            super(context);
+        }
+
+        @Override
+        public FileInputSplit getSplit() {
+            return new FileInputSplit(0, new Path(INPUT_FILE), 0, -1, null);
+        }
+
+        @Override
+        public InputFormat<String, FileInputSplit> createInputFormat() {
+            return new TextInputFormat(new Path(INPUT_FILE));
+        }
+
+        @Override
+        public TypeSerializer<String> createTypeSerializer() {
+            return new StringSerializer();
+        }
+    }
+
+    public static final class FileDataSink extends DataSinkProcessor<Tuple2<String,Integer>> {
+
+        public FileDataSink(ProcessorContext context) {
             super(context);
         }
 
         @Override
         public OutputFormat<Tuple2<String, Integer>> createOutputFormat() {
-            return new PrintingOutputFormat<Tuple2<String, Integer>>();
+            TextOutputFormat<Tuple2<String, Integer>> format =
+                    new TextOutputFormat<Tuple2<String, Integer>>(new Path(OUTPUT_FILE));
+            format.setWriteMode(FileSystem.WriteMode.OVERWRITE);
+            format.setOutputDirectoryMode(FileOutputFormat.OutputDirectoryMode.PARONLY);
+            return format;
         }
 
         @Override
@@ -74,27 +110,7 @@ public class BuildingWordCount extends ProgramLauncher {
         }
     }
 
-    public static final class CollectionDataSource extends SingleSplitDataSourceProcessor<String,GenericInputSplit> {
 
-        public CollectionDataSource(ProcessorContext context) {
-            super(context);
-        }
-
-        @Override
-        public GenericInputSplit getSplit() {
-            return new GenericInputSplit();
-        }
-
-        @Override
-        public InputFormat<String, GenericInputSplit> createInputFormat() {
-            return new CollectionInputFormat<String>(Arrays.asList("on on on on hello hello at at at at roger roger roger roger roger really really really"), new StringSerializer());
-        }
-
-        @Override
-        public TypeSerializer<String> createTypeSerializer() {
-            return new StringSerializer();
-        }
-    }
 
     private Vertex createFlatMapVertex (Configuration conf, FlatMapFunction udf, TypeSerializer<?> inSerializer, TypeSerializer<?> outSerializer, TypeComparator<?> outComparator) throws Exception {
 
@@ -116,10 +132,10 @@ public class BuildingWordCount extends ProgramLauncher {
     public DAG createDAG(TezConfiguration tezConf) throws Exception {
 
         Vertex dataSource = Vertex.create("DataSource",
-                ProcessorDescriptor.create(CollectionDataSource.class.getName()), DOP);
+                ProcessorDescriptor.create(FileSingleSplitDataSource.class.getName()), DOP);
 
         Vertex dataSink = Vertex.create ("DataSink",
-                ProcessorDescriptor.create (PrintingDataSink.class.getName()), DOP);
+                ProcessorDescriptor.create (FileDataSink.class.getName()), DOP);
 
         TypeSerializer<String> inSerializer = new StringSerializer();
 
