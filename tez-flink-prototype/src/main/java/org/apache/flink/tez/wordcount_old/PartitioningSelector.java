@@ -1,6 +1,7 @@
-package org.apache.flink.tez.runtime;
+package org.apache.flink.tez.wordcount_old;
 
 import org.apache.flink.api.common.typeutils.TypeComparator;
+import org.apache.flink.tez.runtime.ChannelSelector;
 
 
 public class PartitioningSelector<T> implements ChannelSelector<T> {

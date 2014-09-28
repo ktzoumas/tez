@@ -4,7 +4,6 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.operators.FlatMapDriver;
-import org.apache.flink.tez.runtime.PartitioningSelector;
 import org.apache.flink.tez.runtime.TezOutputCollector;
 import org.apache.flink.tez.runtime.TezReaderIterator;
 import org.apache.flink.util.Collector;

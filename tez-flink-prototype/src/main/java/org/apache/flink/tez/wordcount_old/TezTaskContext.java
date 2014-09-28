@@ -136,7 +136,12 @@ public class TezTaskContext<S extends Function, T> implements PactTaskContext<S,
 		}
 	}
 
-	@Override
+    @Override
+    public <X> TypeComparator<X> getDriverComparator(int index) {
+        return null;
+    }
+
+    //@Override
 	@SuppressWarnings("unchecked")
 	public <X> TypeComparator<X> getInputComparator(int index) {
 		switch (index) {

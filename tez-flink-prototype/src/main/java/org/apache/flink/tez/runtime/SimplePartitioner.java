@@ -1,4 +1,4 @@
-package org.apache.flink.tez.wordcount_old;
+package org.apache.flink.tez.runtime;
 
 
 import org.apache.hadoop.io.IntWritable;

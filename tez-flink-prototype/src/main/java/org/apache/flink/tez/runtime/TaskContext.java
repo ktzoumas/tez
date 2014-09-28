@@ -3,6 +3,7 @@ package org.apache.flink.tez.runtime;
 import com.google.common.base.Preconditions;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.flink.api.common.distributions.DataDistribution;
 import org.apache.flink.api.common.functions.FlatCombineFunction;
 import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.common.functions.util.FunctionUtils;
@@ -16,6 +17,7 @@ import org.apache.flink.runtime.jobgraph.tasks.AbstractInvokable;
 import org.apache.flink.runtime.memorymanager.MemoryManager;
 import org.apache.flink.runtime.operators.PactDriver;
 import org.apache.flink.runtime.operators.PactTaskContext;
+import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
 import org.apache.flink.runtime.operators.sort.CombiningUnilateralSortMerger;
 import org.apache.flink.runtime.operators.sort.UnilateralSortMerger;
 import org.apache.flink.runtime.operators.udf.RuntimeUDFContext;
@@ -89,7 +91,7 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
     /**
      * The task configuration with the setup parameters.
      */
-    protected TaskConfig config;
+    protected TezTaskConfig config;
 
     /**
      * The class loader used to instantiate user code and user data types.
@@ -99,7 +101,7 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
     /**
      * The flag that tags the task as still running. Checked periodically to abort processing.
      */
-    protected volatile boolean running = true;
+    //protected volatile boolean running = true;
 
     /*
      * Tez-specific variables given by the Processor
@@ -118,78 +120,23 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
 
     TezRuntimeEnvironment runtimeEnvironment;
 
-
-    public TaskContext(TaskConfig config, RuntimeUDFContext runtimeUdfContext, int numberOfOutputTasks, ChannelSelector<OT> channelSelector) {
+    public TaskContext(TezTaskConfig config, RuntimeUDFContext runtimeUdfContext) {
         this.config = config;
         final Class<? extends PactDriver<S, OT>> driverClass = this.config.getDriver();
         this.driver = InstantiationUtil.instantiate(driverClass, PactDriver.class);
         this.stub = this.config.<S>getStubWrapper(this.userCodeClassLoader).getUserCodeObject(Function.class, this.userCodeClassLoader); //TODO get superclass properly
         this.runtimeUdfContext = runtimeUdfContext;
         this.outSerializer = (TypeSerializer<OT>) this.config.getOutputSerializer(getClass().getClassLoader()).getSerializer();
-        this.numberOfOutputTasks = numberOfOutputTasks;
-        this.channelSelector = channelSelector;
+        this.numberOfOutputTasks = this.config.getNumberSubtasksInOutput();
         this.taskName = this.config.getTaskName();
         this.numberOfSubtasks = this.runtimeUdfContext.getNumberOfParallelSubtasks();
         this.indexInSubtaskGroup = this.runtimeUdfContext.getIndexOfThisSubtask();
-        this.runtimeEnvironment = new TezRuntimeEnvironment(512, 32768);
+        this.runtimeEnvironment = new TezRuntimeEnvironment();
     }
+
 
     //-------------------------------------------------------------
-    // Setters needed to initialize this object properly
-    //-------------------------------------------------------------
-
-    /*
-    public void setOutSerializer(TypeSerializer<OT> outSerializer) {
-        this.outSerializer = outSerializer;
-    }
-
-    public void setNumberOfOutputTasks(int numberOfOutputTasks) {
-        this.numberOfOutputTasks = numberOfOutputTasks;
-    }
-
-    public void setTaskName(String taskName) {
-        this.taskName = taskName;
-    }
-
-    public void setNumberOfSubtasks(int numberOfSubtasks) {
-        this.numberOfSubtasks = numberOfSubtasks;
-    }
-
-    public void setIndexInSubtaskGroup(int indexInSubtaskGroup) {
-        this.indexInSubtaskGroup = indexInSubtaskGroup;
-    }
-
-    public void setChannelSelector(ChannelSelector<OT> channelSelector) {
-        this.channelSelector = channelSelector;
-    }
-
-    public void setTaskConfig (TaskConfig config) {
-        this.config = config;
-    }
-
-    public void setUserCodeClassLoader (ClassLoader userCodeClassLoader) {
-        this.userCodeClassLoader = userCodeClassLoader;
-    }
-
-    public void setStub(S stub) {
-        this.stub = stub;
-    }
-
-    public void setInputSerializers(TypeSerializerFactory<?>[] inputSerializers) {
-        this.inputSerializers = inputSerializers;
-    }
-
-    public void setInputComparators(TypeComparator<?>[] inputComparators) {
-        this.inputComparators = inputComparators;
-    }
-
-    public void setConfig(TaskConfig config) {
-        this.config = config;
-    }
-    */
-
-    //-------------------------------------------------------------
-    // Interface to Processor
+    // Interface to FlinkProcessor
     //-------------------------------------------------------------
 
     public void invoke(List<KeyValueReader> readers, List<KeyValueWriter> writers) throws Exception {
@@ -212,16 +159,6 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
             // clean up in any case!
             closeLocalStrategies();
         }
-
-        if (this.running) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(formatLogString("Finished task code."));
-            }
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug(formatLogString("Task code cancelled."));
-            }
-        }
     }
 
 
@@ -241,7 +178,8 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
         // After local strategies
         this.inputs = new MutableObjectIterator[numInputs];
 
-        initInputsSerializersAndComparators(numInputs);
+        int numComparators = driver.getNumberOfDriverComparators();
+        initInputsSerializersAndComparators(numInputs, numComparators);
 
         int index = 0;
         for (KeyValueReader reader : readers) {
@@ -253,6 +191,21 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
         // For now, only one writer allowed
         Preconditions.checkArgument(writers.size() == 1);
         KeyValueWriter writer = writers.get(0);
+
+        final ShipStrategyType strategy = config.getOutputShipStrategy(0);
+        final TypeComparatorFactory<OT> compFactory = config.getOutputComparator(0, this.getUserCodeClassLoader());
+        final DataDistribution dataDist = config.getOutputDataDistribution(0, this.getUserCodeClassLoader());
+
+        if (compFactory == null) {
+            this.channelSelector = new OutputEmitter<OT>(strategy);
+        } else if (dataDist == null){
+            final TypeComparator<OT> comparator = compFactory.createComparator();
+            this.channelSelector = new OutputEmitter<OT>(strategy, comparator);
+        } else {
+            final TypeComparator<OT> comparator = compFactory.createComparator();
+            this.channelSelector = new OutputEmitter<OT>(strategy, comparator, dataDist);
+        }
+
         this.output = new TezOutputCollector<OT>(writer, channelSelector, outSerializer, numberOfOutputTasks);
     }
 
@@ -324,6 +277,22 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
     }
 
     @Override
+    public <X> TypeComparator<X> getDriverComparator(int index) {
+        if (this.inputComparators == null) {
+            throw new IllegalStateException("Comparators have not been created!");
+        }
+        else if (index < 0 || index >= this.driver.getNumberOfDriverComparators()) {
+            throw new IndexOutOfBoundsException();
+        }
+
+        @SuppressWarnings("unchecked")
+        final TypeComparator<X> comparator = (TypeComparator<X>) this.inputComparators[index];
+        return comparator;
+    }
+
+
+
+
     public <X> TypeComparator<X> getInputComparator(int index) {
         if (this.inputComparators == null) {
             throw new IllegalStateException("Comparators have not been created!");
@@ -460,9 +429,10 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
     /**
      * Creates all the serializers and comparators.
      */
-    protected void initInputsSerializersAndComparators(int numInputs) throws Exception {
+    protected void initInputsSerializersAndComparators(int numInputs, int numComparators) throws Exception {
         this.inputSerializers = new TypeSerializerFactory<?>[numInputs];
-        this.inputComparators = this.driver.requiresComparatorOnInput() ? new TypeComparator[numInputs] : null;
+        this.inputComparators = numComparators > 0 ? new TypeComparator[numComparators] : null;
+        //this.inputComparators = this.driver.requiresComparatorOnInput() ? new TypeComparator[numInputs] : null;
         this.inputIterators = new MutableObjectIterator[numInputs];
 
         for (int i = 0; i < numInputs; i++) {
@@ -524,9 +494,6 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
     protected void run() throws Exception {
         // ---------------------------- Now, the actual processing starts ------------------------
         // check for asynchronous canceling
-        if (!this.running) {
-            return;
-        }
 
         boolean stubOpen = false;
 
@@ -540,11 +507,6 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
                 // errors during clean-up are swallowed, because we have already a root exception
                 throw new Exception("The data preparation for task '" + this.taskName +
                         "' , caused an error: " + t.getMessage(), t);
-            }
-
-            // check for canceling
-            if (!this.running) {
-                return;
             }
 
             // open stub implementation
@@ -563,7 +525,7 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
             this.driver.run();
 
             // close. We close here such that a regular close throwing an exception marks a task as failed.
-            if (this.running && this.stub != null) {
+            if (this.stub != null) {
                 FunctionUtils.closeFunction(this.stub);
                 stubOpen = false;
             }
