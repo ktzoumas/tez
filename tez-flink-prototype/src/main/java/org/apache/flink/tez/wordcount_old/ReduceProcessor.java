@@ -13,7 +13,6 @@ import org.apache.flink.runtime.operators.ReduceDriver;
 import org.apache.flink.runtime.operators.sort.UnilateralSortMerger;
 import org.apache.flink.tez.examples_old.WordCount;
 import org.apache.flink.tez.runtime.DummyInvokable;
-import org.apache.flink.tez.runtime.TezOutputCollector;
 import org.apache.flink.tez.runtime.TezReaderIterator;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.MutableObjectIterator;
@@ -96,7 +95,7 @@ public abstract class ReduceProcessor<T> extends SimpleProcessor {
         ForwardingSelector<T> channelSelector =
                 new ForwardingSelector<T>(this.getContext().getTaskIndex());
 
-        collector = new TezOutputCollector<T>(kvWriter, channelSelector, typeSerializer, 1);
+        collector = new TezOutputCollectorOld<T>(kvWriter, channelSelector, typeSerializer, 1);
 
         taskContext.setCollector(collector);
 

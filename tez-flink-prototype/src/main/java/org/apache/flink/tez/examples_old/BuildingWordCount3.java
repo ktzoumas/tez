@@ -32,7 +32,7 @@ import org.apache.flink.tez.input.WritableSerializationDelegate;
 import org.apache.flink.tez.runtime.FlinkDataSinkProcessor;
 import org.apache.flink.tez.runtime.FlinkDataSourceProcessor;
 import org.apache.flink.tez.runtime.FlinkProcessor;
-import org.apache.flink.tez.runtime.MockInputSplitProvider;
+import org.apache.flink.tez.wordcount_old.MockInputSplitProvider;
 import org.apache.flink.tez.runtime.SimplePartitioner;
 import org.apache.flink.tez.runtime.TezTaskConfig;
 import org.apache.flink.tez.util.InstantiationUtil;

@@ -17,7 +17,7 @@ public class WebLogAnalysis {
     private static String documentsPath = "/tmp/documents";
     private static String ranksPath = "/tmp/ranks";
     private static String visitsPath = "/tmp/visits";
-    private static String outputPath = "/tmp/weblog_out9";
+    private static String outputPath = "/tmp/weblog_out10";
 
     public static void main (String [] args) throws Exception {
         final ExecutionEnvironment env = new TezExecutionEnvironment(true);

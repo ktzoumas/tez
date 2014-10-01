@@ -4,7 +4,6 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.operators.FlatMapDriver;
-import org.apache.flink.tez.runtime.TezOutputCollector;
 import org.apache.flink.tez.runtime.TezReaderIterator;
 import org.apache.flink.util.Collector;
 import org.apache.tez.runtime.api.ProcessorContext;
@@ -53,7 +52,7 @@ public abstract class FlatMapProcessor<IN, OUT> extends SimpleProcessor {
         PartitioningSelector<OUT> channelSelector =
                  new PartitioningSelector<OUT>(this.outTypeComparator);
         int numOutputStreams = getContext().getVertexParallelism();
-        collector = new TezOutputCollector<OUT>(kvWriter, channelSelector, outTypeSerializer, numOutputStreams);
+        collector = new TezOutputCollectorOld<OUT>(kvWriter, channelSelector, outTypeSerializer, numOutputStreams);
 
 
         taskContext.setCollector(collector);

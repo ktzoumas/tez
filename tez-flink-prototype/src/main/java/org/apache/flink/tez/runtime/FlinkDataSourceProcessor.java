@@ -20,7 +20,6 @@ import org.apache.tez.runtime.api.Event;
 import org.apache.tez.runtime.api.LogicalInput;
 import org.apache.tez.runtime.api.LogicalOutput;
 import org.apache.tez.runtime.api.ProcessorContext;
-import org.apache.tez.runtime.api.events.InputInitializerEvent;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.util.ArrayList;
@@ -77,7 +76,6 @@ public class FlinkDataSourceProcessor<OT> extends AbstractLogicalIOProcessor {
     public void run(Map<String, LogicalInput> inputs, Map<String, LogicalOutput> outputs) throws Exception {
 
         Preconditions.checkArgument((inputs == null) || (inputs.size() == 0));
-        Preconditions.checkArgument(outputs.size() == 1);
 
         // Initialize inputs, get readers and writers
         this.outputs = outputs;
@@ -103,6 +101,28 @@ public class FlinkDataSourceProcessor<OT> extends AbstractLogicalIOProcessor {
                 final InputFormat<OT, InputSplit> format = this.format;
                 format.open(split);
 
+                int numOutputs = outputs.size();
+                ArrayList<ChannelSelector<OT>> channelSelectors = new ArrayList<ChannelSelector<OT>>(numOutputs);
+                ArrayList<Integer> numStreamsInOutputs = new ArrayList<Integer>(numOutputs);
+                for (int i = 0; i < numOutputs; i++) {
+                    final ShipStrategyType strategy = config.getOutputShipStrategy(i);
+                    final TypeComparatorFactory<OT> compFactory = config.getOutputComparator(i, this.userCodeClassLoader);
+                    final DataDistribution dataDist = config.getOutputDataDistribution(i, this.userCodeClassLoader);
+                    if (compFactory == null) {
+                        channelSelectors.add(i, new OutputEmitter<OT>(strategy));
+                    } else if (dataDist == null){
+                        final TypeComparator<OT> comparator = compFactory.createComparator();
+                        channelSelectors.add(i, new OutputEmitter<OT>(strategy, comparator));
+                    } else {
+                        final TypeComparator<OT> comparator = compFactory.createComparator();
+                        channelSelectors.add(i,new OutputEmitter<OT>(strategy, comparator, dataDist));
+                    }
+                    // TODO differentiate between outputs
+                    numStreamsInOutputs.add(i, config.getNumberSubtasksInOutput());
+                }
+                collector = new TezOutputCollector<OT>(writers, channelSelectors, serializerFactory.getSerializer(), numStreamsInOutputs);
+
+                /*
                 ChannelSelector<OT> channelSelector = null;
                 final ShipStrategyType strategy = config.getOutputShipStrategy(0);
                 final TypeComparatorFactory<OT> compFactory = config.getOutputComparator(0, this.userCodeClassLoader);
@@ -116,9 +136,10 @@ public class FlinkDataSourceProcessor<OT> extends AbstractLogicalIOProcessor {
                     final TypeComparator<OT> comparator = compFactory.createComparator();
                     channelSelector = new OutputEmitter<OT>(strategy, comparator, dataDist);
                 }
-
                 int numberOfOutputStreams = config.getNumberSubtasksInOutput();
+
                 collector = new TezOutputCollector<OT>(writers.get(0), channelSelector, serializerFactory.getSerializer(), numberOfOutputStreams);
+                */
                 while (!format.reachedEnd()) {
                     // build next pair and ship pair if it is valid
                     if ((record = format.nextRecord(record)) != null) {

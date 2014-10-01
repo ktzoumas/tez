@@ -7,6 +7,7 @@ import org.apache.flink.util.InstantiationUtil;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -57,7 +58,7 @@ public class TezTaskConfig extends TaskConfig {
     }
 
 
-    public void setInputPositions(HashMap<String,Integer> inputPositions) {
+    public void setInputPositions(HashMap<String,ArrayList<Integer>> inputPositions) {
         try {
             InstantiationUtil.writeObjectToConfig(inputPositions, this.config, INPUT_POSITIONS);
         } catch (IOException e) {
@@ -65,8 +66,8 @@ public class TezTaskConfig extends TaskConfig {
         }
     }
 
-    public HashMap<String,Integer> getInputPositions () {
-        HashMap<String,Integer> inputPositions = null;
+    public HashMap<String,ArrayList<Integer>> getInputPositions () {
+        HashMap<String,ArrayList<Integer>> inputPositions = null;
         try {
             inputPositions = (HashMap) InstantiationUtil.readObjectFromConfig(this.config, INPUT_POSITIONS, getConfiguration().getClassLoader());
         }

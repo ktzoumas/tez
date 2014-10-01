@@ -1,9 +1,12 @@
 package org.apache.flink.tez.runtime;
 
+import org.apache.commons.lang.SerializationUtils;
 import org.apache.flink.api.common.functions.Function;
+import org.apache.flink.runtime.operators.PactDriver;
 import org.apache.flink.runtime.operators.udf.RuntimeUDFContext;
 import org.apache.flink.runtime.operators.util.TaskConfig;
 import org.apache.flink.tez.util.InstantiationUtil;
+import org.apache.flink.tez.util.ListUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.tez.common.TezUtils;
 import org.apache.tez.dag.api.UserPayload;
@@ -14,6 +17,7 @@ import org.apache.tez.runtime.library.api.KeyValueWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -62,19 +66,25 @@ public class FlinkProcessor<S extends Function, OT> extends AbstractLogicalIOPro
     @Override
     public void run(Map<String, LogicalInput> inputs, Map<String, LogicalOutput> outputs) throws Exception {
 
-        // Initialize inputs, get readers and writers
         this.inputs = inputs;
         this.outputs = outputs;
-        this.numInputs = inputs.size();
+        final Class<? extends PactDriver<S, OT>> driverClass = this.task.getTaskConfig().getDriver();
+        PactDriver<S,OT> driver = InstantiationUtil.instantiate(driverClass, PactDriver.class);
+        this.numInputs = driver.getNumberOfInputs();
         this.numOutputs = outputs.size();
 
+
         this.readers = new ArrayList<KeyValueReader>(numInputs);
-        HashMap<String, Integer> inputPositions = ((TezTaskConfig) this.task.getTaskConfig()).getInputPositions();
+        ListUtils.ensureSize(readers, numInputs);
+        HashMap<String, ArrayList<Integer>> inputPositions = ((TezTaskConfig) this.task.getTaskConfig()).getInputPositions();
         if (this.inputs != null) {
             for (String name : this.inputs.keySet()) {
                 LogicalInput input = this.inputs.get(name);
-                int pos = inputPositions.get(name);
-                readers.add(pos, (KeyValueReader) input.getReader());
+                ArrayList<Integer> positions = inputPositions.get(name);
+                for (Integer pos : positions) {
+                    //int pos = inputPositions.get(name);
+                    readers.set(pos, (KeyValueReader) input.getReader());
+                }
             }
         }
 

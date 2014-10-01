@@ -21,7 +21,7 @@ import org.apache.flink.core.fs.Path;
 import org.apache.flink.tez.input.FlinkUnorderedKVEdgeConfig;
 import org.apache.flink.tez.input.WritableSerializationDelegate;
 import org.apache.flink.tez.runtime.DataSinkProcessor;
-import org.apache.flink.tez.runtime.SingleSplitDataSourceProcessor;
+import org.apache.flink.tez.wordcount_old.SingleSplitDataSourceProcessor;
 import org.apache.flink.tez.util.InstantiationUtil;
 import org.apache.flink.tez.wordcount_old.*;
 import org.apache.flink.util.Collector;

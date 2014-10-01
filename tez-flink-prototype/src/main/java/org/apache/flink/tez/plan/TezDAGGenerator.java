@@ -1,15 +1,11 @@
 package org.apache.flink.tez.plan;
 
 
-import com.google.common.base.Preconditions;
 import org.apache.flink.api.common.distributions.DataDistribution;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerFactory;
-import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.compiler.CompilerException;
-import org.apache.flink.compiler.dag.DataSinkNode;
-import org.apache.flink.compiler.dag.DataSourceNode;
 import org.apache.flink.compiler.dag.TempMode;
 import org.apache.flink.compiler.plan.Channel;
 import org.apache.flink.compiler.plan.DualInputPlanNode;
@@ -21,24 +17,15 @@ import org.apache.flink.compiler.plan.SinkPlanNode;
 import org.apache.flink.compiler.plan.SourcePlanNode;
 import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
-import org.apache.flink.core.io.InputSplit;
-import org.apache.flink.core.io.InputSplitAssigner;
-import org.apache.flink.core.io.InputSplitSource;
-import org.apache.flink.runtime.jobgraph.DistributionPattern;
-import org.apache.flink.runtime.jobgraph.OutputFormatVertex;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
 import org.apache.flink.runtime.operators.util.LocalStrategy;
 import org.apache.flink.runtime.operators.util.TaskConfig;
 import org.apache.flink.tez.input.FlinkInputSplitProvider;
-import org.apache.flink.tez.runtime.ChannelSelector;
-import org.apache.flink.tez.runtime.MockInputSplitProvider;
 import org.apache.flink.tez.runtime.TezTaskConfig;
 import org.apache.flink.util.Visitor;
 import org.apache.tez.dag.api.DAG;
 import org.apache.tez.dag.api.TezConfiguration;
-import org.apache.tez.dag.api.Vertex;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -84,6 +71,7 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
 
         return dag;
     }
+
 
     @Override
     public boolean preVisit(PlanNode node) {
@@ -141,6 +129,7 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
 
             FlinkVertex targetVertex = this.vertices.get(node);
             TezTaskConfig targetVertexConfig = targetVertex.getConfig();
+
 
             while (inConns.hasNext()) {
                 Channel input = inConns.next();

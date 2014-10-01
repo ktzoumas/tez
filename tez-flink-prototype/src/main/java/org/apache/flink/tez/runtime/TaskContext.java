@@ -31,7 +31,7 @@ import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -190,7 +190,8 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
         }
 
         // For now, only one writer allowed
-        Preconditions.checkArgument(writers.size() == 1);
+
+        /*
         KeyValueWriter writer = writers.get(0);
 
         final ShipStrategyType strategy = config.getOutputShipStrategy(0);
@@ -208,6 +209,28 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
         }
 
         this.output = new TezOutputCollector<OT>(writer, channelSelector, outSerializer, numberOfOutputTasks);
+        */
+
+        int numOutputs = writers.size();
+        ArrayList<ChannelSelector<OT>> channelSelectors = new ArrayList<ChannelSelector<OT>>(numOutputs);
+        ArrayList<Integer> numStreamsInOutputs = new ArrayList<Integer>(numOutputs);
+        for (int i = 0; i < numOutputs; i++) {
+            final ShipStrategyType strategy = config.getOutputShipStrategy(i);
+            final TypeComparatorFactory<OT> compFactory = config.getOutputComparator(i, this.userCodeClassLoader);
+            final DataDistribution dataDist = config.getOutputDataDistribution(i, this.userCodeClassLoader);
+            if (compFactory == null) {
+                channelSelectors.add(i, new OutputEmitter<OT>(strategy));
+            } else if (dataDist == null){
+                final TypeComparator<OT> comparator = compFactory.createComparator();
+                channelSelectors.add(i, new OutputEmitter<OT>(strategy, comparator));
+            } else {
+                final TypeComparator<OT> comparator = compFactory.createComparator();
+                channelSelectors.add(i,new OutputEmitter<OT>(strategy, comparator, dataDist));
+            }
+            // TODO differentiate between outputs
+            numStreamsInOutputs.add(i, config.getNumberSubtasksInOutput());
+        }
+        this.output = new TezOutputCollector<OT>(writers, channelSelectors, outSerializer, numStreamsInOutputs);
     }
 
 

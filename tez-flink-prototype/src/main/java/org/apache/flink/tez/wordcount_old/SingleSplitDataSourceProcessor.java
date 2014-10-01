@@ -1,10 +1,9 @@
-package org.apache.flink.tez.runtime;
+package org.apache.flink.tez.wordcount_old;
 
 
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.core.io.InputSplit;
-import org.apache.flink.tez.wordcount_old.ForwardingSelector;
 import org.apache.tez.runtime.api.ProcessorContext;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 import org.apache.tez.runtime.library.processor.SimpleProcessor;
@@ -35,7 +34,7 @@ public abstract class SingleSplitDataSourceProcessor<T, IS extends InputSplit> e
         ForwardingSelector<T> channelSelector =
                 new ForwardingSelector<T>(this.getContext().getTaskIndex());
 
-        TezOutputCollector<T> collector = new TezOutputCollector<T>(kvWriter, channelSelector, typeSerializer, 1);
+        TezOutputCollectorOld<T> collector = new TezOutputCollectorOld<T>(kvWriter, channelSelector, typeSerializer, 1);
 
         inputFormat.open(getSplit());
 
