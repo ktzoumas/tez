@@ -11,13 +11,18 @@ import org.apache.tez.dag.api.TezConfiguration;
 import org.apache.tez.dag.api.Vertex;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
-public class FlinkVertex {
+public abstract class FlinkVertex {
 
-    private Vertex cached;
+    protected Vertex cached;
     private String taskName;
     private int parallelism;
-    private TezTaskConfig taskConfig;
+    protected TezTaskConfig taskConfig;
+    protected String uniqueName; //Unique name in DAG
+    private Map<FlinkVertex,Integer> inputPositions;
 
     public TezTaskConfig getConfig() {
         return taskConfig;
@@ -28,33 +33,37 @@ public class FlinkVertex {
         this.taskName = taskName;
         this.parallelism = parallelism;
         this.taskConfig = taskConfig;
+        this.uniqueName = taskName + UUID.randomUUID().toString();
+        this.inputPositions = new HashMap<FlinkVertex, Integer>();
     }
 
     public int getParallelism () {
         return parallelism;
     }
 
-    public Vertex createVertex (TezConfiguration conf) {
-        try {
-            conf.set("io.flink.processor.taskconfig", InstantiationUtil.writeObjectToConfig(taskConfig));
-
-            ProcessorDescriptor descriptor = ProcessorDescriptor.create(
-                    FlinkProcessor.class.getName());
-
-            descriptor.setUserPayload(TezUtils.createUserPayloadFromConf(conf));
-
-            cached = Vertex.create(taskName, descriptor, parallelism);
-
-            return cached;
-        }
-        catch (IOException e) {
-            throw new CompilerException(
-                    "An error occurred while creating a Tez Vertex: " + e.getMessage(), e);
-        }
-    }
+    public abstract Vertex createVertex (TezConfiguration conf);
 
     public Vertex getVertex () {
         return cached;
+    }
+
+    protected String getUniqueName () {
+        return uniqueName;
+    }
+
+    public void addInput (FlinkVertex vertex, int position) {
+        inputPositions.put(vertex, position);
+    }
+
+    // Must be called before taskConfig is written to Tez configuration
+    protected void writeInputPositionsToConfig () {
+        HashMap<String,Integer> toWrite = new HashMap<String, Integer>();
+        for (FlinkVertex v: inputPositions.keySet()) {
+            String name = v.getUniqueName();
+            int pos = inputPositions.get(v);
+            toWrite.put(name, pos);
+        }
+        this.taskConfig.setInputPositions(toWrite);
     }
 
 }

@@ -12,6 +12,8 @@ import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,14 +67,18 @@ public class FlinkProcessor<S extends Function, OT> extends AbstractLogicalIOPro
         this.outputs = outputs;
         this.numInputs = inputs.size();
         this.numOutputs = outputs.size();
+
         this.readers = new ArrayList<KeyValueReader>(numInputs);
-        this.writers = new ArrayList<KeyValueWriter>(numOutputs);
+        HashMap<String, Integer> inputPositions = ((TezTaskConfig) this.task.getTaskConfig()).getInputPositions();
         if (this.inputs != null) {
-            for (LogicalInput input : this.inputs.values()) {
-                input.start();
-                readers.add((KeyValueReader) input.getReader());
+            for (String name : this.inputs.keySet()) {
+                LogicalInput input = this.inputs.get(name);
+                int pos = inputPositions.get(name);
+                readers.add(pos, (KeyValueReader) input.getReader());
             }
         }
+
+        this.writers = new ArrayList<KeyValueWriter>(numOutputs);
         if (this.outputs != null) {
             for (LogicalOutput output : this.outputs.values()) {
                 output.start();

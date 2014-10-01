@@ -31,6 +31,7 @@ import org.apache.tez.runtime.library.api.KeyValueReader;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 
 
@@ -185,7 +186,7 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
         for (KeyValueReader reader : readers) {
             this.inputIterators[index] = new TezReaderIterator<Object>(reader);
             initInputLocalStrategy(index);
-
+            index++;
         }
 
         // For now, only one writer allowed
@@ -291,20 +292,6 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
     }
 
 
-
-
-    public <X> TypeComparator<X> getInputComparator(int index) {
-        if (this.inputComparators == null) {
-            throw new IllegalStateException("Comparators have not been created!");
-        }
-        else if (index < 0 || index >= this.driver.getNumberOfInputs()) {
-            throw new IndexOutOfBoundsException();
-        }
-
-        @SuppressWarnings("unchecked")
-        final TypeComparator<X> comparator = (TypeComparator<X>) this.inputComparators[index];
-        return comparator;
-    }
 
     @Override
     public S getStub() {
@@ -439,8 +426,10 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
             //  ---------------- create the serializer first ---------------------
             final TypeSerializerFactory<?> serializerFactory = this.config.getInputSerializer(i, this.userCodeClassLoader);
             this.inputSerializers[i] = serializerFactory;
-
-            //  ---------------- create the driver's comparator ---------------------
+            // this.inputIterators[i] = createInputIterator(this.inputReaders[i], this.inputSerializers[i]);
+        }
+        //  ---------------- create the driver's comparators ---------------------
+        for (int i = 0; i < numComparators; i++) {
             if (this.inputComparators != null) {
                 final TypeComparatorFactory<?> comparatorFactory = this.config.getDriverComparator(i, this.userCodeClassLoader);
                 this.inputComparators[i] = comparatorFactory.createComparator();
@@ -535,12 +524,16 @@ public class TaskContext<S extends Function,OT>  implements PactTaskContext<S, O
         }
         catch (Exception ex) {
             // close the input, but do not report any exceptions, since we already have another root cause
+            ex.printStackTrace();
+            throw new RuntimeException("Exception in TaskContext: " + ex.getMessage() + " "+  ex.getStackTrace());
+            /*
             if (stubOpen) {
                 try {
                     FunctionUtils.closeFunction(this.stub);
                 }
                 catch (Throwable t) {}
             }
+            */
         }
         finally {
             this.driver.cleanup();

@@ -1,7 +1,7 @@
 package org.apache.flink.tez.wordcount_old;
 
 
-import org.apache.flink.tez.examples.WordCount;
+import org.apache.flink.tez.examples_old.WordCount;
 
 import java.io.*;
 import java.util.HashMap;

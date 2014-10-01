@@ -1,12 +1,11 @@
-package org.apache.flink.tez.examples;
+package org.apache.flink.tez.examples_old;
 
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.io.FileOutputFormat;
-import org.apache.flink.api.common.io.InputFormat;
-import org.apache.flink.api.common.io.OutputFormat;
 import org.apache.flink.api.common.operators.util.UserCodeClassWrapper;
+import org.apache.flink.api.common.operators.util.UserCodeObjectWrapper;
 import org.apache.flink.api.common.typeutils.TypeComparator;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
@@ -20,7 +19,6 @@ import org.apache.flink.api.java.typeutils.runtime.RuntimeStatefulSerializerFact
 import org.apache.flink.api.java.typeutils.runtime.TupleComparator;
 import org.apache.flink.api.java.typeutils.runtime.TupleSerializer;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.runtime.operators.DriverStrategy;
@@ -31,27 +29,32 @@ import org.apache.flink.runtime.operators.util.LocalStrategy;
 import org.apache.flink.tez.input.FlinkUnorderedKVEdgeConfig;
 import org.apache.flink.tez.input.FlinkUnorderedPartitionedKVEdgeConfig;
 import org.apache.flink.tez.input.WritableSerializationDelegate;
-import org.apache.flink.tez.runtime.DataSinkProcessor;
+import org.apache.flink.tez.runtime.FlinkDataSinkProcessor;
+import org.apache.flink.tez.runtime.FlinkDataSourceProcessor;
 import org.apache.flink.tez.runtime.FlinkProcessor;
+import org.apache.flink.tez.runtime.MockInputSplitProvider;
 import org.apache.flink.tez.runtime.SimplePartitioner;
-import org.apache.flink.tez.runtime.SingleSplitDataSourceProcessor;
 import org.apache.flink.tez.runtime.TezTaskConfig;
 import org.apache.flink.tez.util.InstantiationUtil;
-import org.apache.flink.tez.wordcount_old.*;
+import org.apache.flink.tez.wordcount_old.ProgramLauncher;
 import org.apache.flink.util.Collector;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.tez.common.TezUtils;
-import org.apache.tez.dag.api.*;
-import org.apache.tez.runtime.api.ProcessorContext;
+import org.apache.tez.dag.api.DAG;
+import org.apache.tez.dag.api.Edge;
+import org.apache.tez.dag.api.EdgeProperty;
+import org.apache.tez.dag.api.ProcessorDescriptor;
+import org.apache.tez.dag.api.TezConfiguration;
+import org.apache.tez.dag.api.Vertex;
 import org.apache.tez.runtime.library.api.TezRuntimeConfiguration;
 
-public class BuildingWordCount2 extends ProgramLauncher {
+public class BuildingWordCount3 extends ProgramLauncher {
 
     private static int DOP = 8;
 
     public static String INPUT_FILE="/tmp/sherlock.txt";
 
-    public static String OUTPUT_FILE="/tmp/job_output15";
+    public static String OUTPUT_FILE="/tmp/job_output17";
 
     public static StringSerializer stringSerializer = new StringSerializer();
 
@@ -71,54 +74,6 @@ public class BuildingWordCount2 extends ProgramLauncher {
             new TypeSerializer[] {new StringSerializer()}
     );
 
-
-    public static final class FileSingleSplitDataSource extends SingleSplitDataSourceProcessor<String, FileInputSplit> {
-
-        public FileSingleSplitDataSource(ProcessorContext context) {
-            super(context);
-        }
-
-        @Override
-        public FileInputSplit getSplit() {
-            return new FileInputSplit(0, new Path(INPUT_FILE), 0, -1, null);
-        }
-
-        @Override
-        public InputFormat<String, FileInputSplit> createInputFormat() {
-            return new TextInputFormat(new Path(INPUT_FILE));
-        }
-
-        @Override
-        public TypeSerializer<String> createTypeSerializer() {
-            return new StringSerializer();
-        }
-    }
-
-    public static final class FileDataSink extends DataSinkProcessor<Tuple2<String,Integer>> {
-
-        public FileDataSink(ProcessorContext context) {
-            super(context);
-        }
-
-        @Override
-        public OutputFormat<Tuple2<String, Integer>> createOutputFormat() {
-            TextOutputFormat<Tuple2<String, Integer>> format =
-                    new TextOutputFormat<Tuple2<String, Integer>>(new Path(OUTPUT_FILE));
-            format.setWriteMode(FileSystem.WriteMode.OVERWRITE);
-            format.setOutputDirectoryMode(FileOutputFormat.OutputDirectoryMode.PARONLY);
-            return format;
-        }
-
-        @Override
-        public TypeSerializer<Tuple2<String, Integer>> createTypeSerializer() {
-            return new TupleSerializer<Tuple2<String, Integer>>(
-                    (Class<Tuple2<String,Integer>>) (Class<?>) Tuple2.class,
-                    new TypeSerializer [] {
-                            new StringSerializer(),
-                            new IntSerializer()
-                    });
-        }
-    }
 
     public static class Tokenizer implements FlatMapFunction<String,Tuple2<String,Integer>> {
 
@@ -142,12 +97,12 @@ public class BuildingWordCount2 extends ProgramLauncher {
         }
     }
 
-    public BuildingWordCount2() {
-        super("BuildingWordCount2");
+    public BuildingWordCount3() {
+        super("BuildingWordCount3");
     }
 
     public static void main (String [] args) {
-        new BuildingWordCount2().runLocal();
+        new BuildingWordCount3().runLocal();
     }
 
     private Vertex createVertex (String name, org.apache.hadoop.conf.Configuration conf, TezTaskConfig taskConfig) throws Exception {
@@ -165,6 +120,53 @@ public class BuildingWordCount2 extends ProgramLauncher {
 
         return vertex;
     }
+
+    private Vertex createDataSink (TezConfiguration conf) throws Exception {
+        TezConfiguration tezConf = new TezConfiguration(conf);
+        TezTaskConfig sinkConfig = new TezTaskConfig(new Configuration());
+
+        TextOutputFormat<Tuple2<String, Integer>> format =
+                new TextOutputFormat<Tuple2<String, Integer>>(new Path(OUTPUT_FILE));
+        format.setWriteMode(FileSystem.WriteMode.OVERWRITE);
+        format.setOutputDirectoryMode(FileOutputFormat.OutputDirectoryMode.PARONLY);
+
+        sinkConfig.setStubWrapper(new UserCodeObjectWrapper<TextOutputFormat>(format));
+        sinkConfig.setInputSerializer(new RuntimeStatefulSerializerFactory<Tuple2<String,Integer>>(tupleSerializer, (Class<Tuple2<String,Integer>>) (Class<?>) Tuple2.class), 0);
+
+        tezConf.set("io.flink.processor.taskconfig", InstantiationUtil.writeObjectToConfig(sinkConfig));
+        ProcessorDescriptor descriptor = ProcessorDescriptor.create(
+                FlinkDataSinkProcessor.class.getName());
+        descriptor.setUserPayload(TezUtils.createUserPayloadFromConf(tezConf));
+        Vertex vertex = Vertex.create("Data Sink", descriptor, DOP);
+        return vertex;
+    }
+
+    private Vertex createDataSource (TezConfiguration conf) throws Exception {
+
+        TezConfiguration tezConf = new TezConfiguration(conf);
+        TezTaskConfig sourceConfig = new TezTaskConfig (new Configuration());
+        TextInputFormat format = new TextInputFormat(new Path(INPUT_FILE));
+
+        MockInputSplitProvider inputSplitProvider = new MockInputSplitProvider();
+        inputSplitProvider.addInputSplits(INPUT_FILE, 1);
+
+        sourceConfig.setStubWrapper(new UserCodeObjectWrapper<TextInputFormat>(format));
+        sourceConfig.addOutputShipStrategy(ShipStrategyType.FORWARD);
+        sourceConfig.setOutputSerializer(new RuntimeStatefulSerializerFactory<String>(stringSerializer, String.class));
+        sourceConfig.setNumberSubtasksInOutput(DOP);
+        sourceConfig.setInputSplitProvider(inputSplitProvider);
+
+        tezConf.set("io.flink.processor.taskconfig", InstantiationUtil.writeObjectToConfig(sourceConfig));
+        ProcessorDescriptor descriptor = ProcessorDescriptor.create(
+                FlinkDataSourceProcessor.class.getName());
+        descriptor.setUserPayload(TezUtils.createUserPayloadFromConf(tezConf));
+        Vertex vertex = Vertex.create("Data Source", descriptor, DOP);
+
+        return vertex;
+    }
+
+
+
 
     private Vertex createTokenizer (TezConfiguration tezConf) throws Exception {
 
@@ -228,11 +230,9 @@ public class BuildingWordCount2 extends ProgramLauncher {
 
         Vertex reducer = createSummer(tezConf);
 
-        Vertex dataSource = Vertex.create("DataSource",
-                ProcessorDescriptor.create(FileSingleSplitDataSource.class.getName()), DOP);
+        Vertex dataSource = createDataSource(tezConf);
 
-        Vertex dataSink = Vertex.create ("DataSink",
-                ProcessorDescriptor.create (FileDataSink.class.getName()), DOP);
+        Vertex dataSink = createDataSink(tezConf);
 
         FlinkUnorderedKVEdgeConfig srcMapEdgeConf = (FlinkUnorderedKVEdgeConfig) (FlinkUnorderedKVEdgeConfig
                 .newBuilder(IntWritable.class.getName(), WritableSerializationDelegate.class.getName())
@@ -309,4 +309,5 @@ public class BuildingWordCount2 extends ProgramLauncher {
 
 
     }
+
 }

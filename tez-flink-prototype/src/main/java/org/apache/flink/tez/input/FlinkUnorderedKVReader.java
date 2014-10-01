@@ -144,6 +144,8 @@ public class FlinkUnorderedKVReader<K, V> extends KeyValueReader {
         return value.getInstance();
     }
 
+    public Object getCurrentRawValue() {return value;}
+
     /**
      * Tries reading the next key and value from the current reader.
      * @return true if the current reader has more records

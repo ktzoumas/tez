@@ -11,7 +11,7 @@ import org.apache.flink.runtime.memorymanager.MemoryManager;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.ReduceDriver;
 import org.apache.flink.runtime.operators.sort.UnilateralSortMerger;
-import org.apache.flink.tez.examples.WordCount;
+import org.apache.flink.tez.examples_old.WordCount;
 import org.apache.flink.tez.runtime.DummyInvokable;
 import org.apache.flink.tez.runtime.TezOutputCollector;
 import org.apache.flink.tez.runtime.TezReaderIterator;

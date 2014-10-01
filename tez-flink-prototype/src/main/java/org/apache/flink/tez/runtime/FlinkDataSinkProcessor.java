@@ -3,6 +3,7 @@ package org.apache.flink.tez.runtime;
 
 import com.google.common.base.Preconditions;
 import org.apache.flink.api.common.io.OutputFormat;
+import org.apache.flink.api.common.operators.util.UserCodeWrapper;
 import org.apache.flink.api.common.typeutils.TypeComparatorFactory;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.TypeSerializerFactory;
@@ -179,7 +180,7 @@ public class FlinkDataSinkProcessor<IT> extends AbstractLogicalIOProcessor{
 
     private void initOutputFormat () {
         try {
-            this.format = config.<OutputFormat<IT>>getStubWrapper(this.userCodeClassLoader).getUserCodeObject(OutputFormat.class, this.userCodeClassLoader);
+            this.format = this.config.<OutputFormat<IT>>getStubWrapper(this.userCodeClassLoader).getUserCodeObject(OutputFormat.class, this.userCodeClassLoader);
 
             // check if the class is a subclass, if the check is required
             if (!OutputFormat.class.isAssignableFrom(this.format.getClass())) {

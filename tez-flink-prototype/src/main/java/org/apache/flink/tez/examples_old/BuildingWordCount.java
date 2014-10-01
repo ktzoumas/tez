@@ -1,4 +1,4 @@
-package org.apache.flink.tez.examples;
+package org.apache.flink.tez.examples_old;
 
 
 import org.apache.flink.api.common.functions.FlatMapFunction;

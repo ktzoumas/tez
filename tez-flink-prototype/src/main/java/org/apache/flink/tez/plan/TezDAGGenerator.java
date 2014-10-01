@@ -1,10 +1,16 @@
 package org.apache.flink.tez.plan;
 
 
+import com.google.common.base.Preconditions;
+import org.apache.flink.api.common.distributions.DataDistribution;
+import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.common.typeutils.TypeSerializerFactory;
+import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.compiler.CompilerException;
 import org.apache.flink.compiler.dag.DataSinkNode;
 import org.apache.flink.compiler.dag.DataSourceNode;
+import org.apache.flink.compiler.dag.TempMode;
 import org.apache.flink.compiler.plan.Channel;
 import org.apache.flink.compiler.plan.DualInputPlanNode;
 import org.apache.flink.compiler.plan.NAryUnionPlanNode;
@@ -15,11 +21,19 @@ import org.apache.flink.compiler.plan.SinkPlanNode;
 import org.apache.flink.compiler.plan.SourcePlanNode;
 import org.apache.flink.configuration.ConfigConstants;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.core.io.InputSplit;
+import org.apache.flink.core.io.InputSplitAssigner;
+import org.apache.flink.core.io.InputSplitSource;
+import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.OutputFormatVertex;
 import org.apache.flink.runtime.operators.DriverStrategy;
 import org.apache.flink.runtime.operators.shipping.ShipStrategyType;
+import org.apache.flink.runtime.operators.util.LocalStrategy;
 import org.apache.flink.runtime.operators.util.TaskConfig;
+import org.apache.flink.tez.input.FlinkInputSplitProvider;
 import org.apache.flink.tez.runtime.ChannelSelector;
+import org.apache.flink.tez.runtime.MockInputSplitProvider;
 import org.apache.flink.tez.runtime.TezTaskConfig;
 import org.apache.flink.util.Visitor;
 import org.apache.tez.dag.api.DAG;
@@ -28,10 +42,12 @@ import org.apache.tez.dag.api.Vertex;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 
 public class TezDAGGenerator implements Visitor<PlanNode> {
 
@@ -92,7 +108,7 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
                 vertex = createDualInputVertex((DualInputPlanNode) node);
             }
             else if (node instanceof NAryUnionPlanNode) {
-                throw new CompilerException("Union is not supported yet");
+                vertex = createUnionVertex ((NAryUnionPlanNode) node);
             }
             else {
                 throw new CompilerException("Unrecognized node type: " + node.getClass().getName());
@@ -112,43 +128,23 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
     }
 
     @Override
-    public void postVisit(PlanNode node) {
+    public void postVisit (PlanNode node) {
         try {
-            if (node instanceof SourcePlanNode || node instanceof NAryUnionPlanNode) {
+            if (node instanceof SourcePlanNode) {
                 return;
             }
-
-            final FlinkVertex targetVertex = vertices.get(node);
-
             final Iterator<Channel> inConns = node.getInputs().iterator();
-
             if (!inConns.hasNext()) {
                 throw new CompilerException("Bug: Found a non-source task with no input.");
             }
+            int inputIndex = 0;
+
+            FlinkVertex targetVertex = this.vertices.get(node);
+            TezTaskConfig targetVertexConfig = targetVertex.getConfig();
 
             while (inConns.hasNext()) {
                 Channel input = inConns.next();
-                FlinkEdge edge;
-                FlinkVertex source = vertices.get(input.getSource());
-                FlinkVertex target = vertices.get(input.getTarget());
-                ShipStrategyType shipStrategy = input.getShipStrategy();
-                TypeSerializer<?> serializer = input.getSerializer().getSerializer();
-                if ((shipStrategy == ShipStrategyType.FORWARD) || (shipStrategy == ShipStrategyType.NONE)) {
-                    edge = new FlinkForwardEdge(source, target, serializer);
-                }
-                else if (shipStrategy == ShipStrategyType.BROADCAST) {
-                    edge = new FlinkBroadcastEdge(source, target, serializer);
-                }
-                else if (shipStrategy == ShipStrategyType.PARTITION_HASH) {
-                    edge = new FlinkPartitionEdge(source, target, serializer);
-                }
-                else {
-                    throw new CompilerException("Ship strategy between nodes " + source.getVertex().getName() + " and " + target.getVertex().getName() + " currently not supported");
-                }
-                source.getConfig().setNumberSubtasksInOutput(target.getParallelism());
-
-                edges.add(edge);
-
+                inputIndex += translateChannel(input, inputIndex, targetVertex, targetVertexConfig, false);
             }
         }
         catch (Exception e) {
@@ -156,9 +152,6 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
                     "An error occurred while translating the optimized plan to a Tez DAG: " + e.getMessage(), e);
         }
     }
-
-
-
 
     private FlinkVertex createSingleInputVertex(SingleInputPlanNode node) throws CompilerException, IOException {
 
@@ -178,7 +171,7 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
         }
         assignDriverResources(node, config);
 
-        return new FlinkVertex(taskName, dop, config);
+        return new FlinkProcessorVertex(taskName, dop, config);
     }
 
     private FlinkVertex createDualInputVertex(DualInputPlanNode node) throws CompilerException, IOException {
@@ -205,7 +198,7 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
 
         assignDriverResources(node, config);
 
-        return new FlinkVertex(taskName, dop, config);
+        return new FlinkProcessorVertex(taskName, dop, config);
     }
 
     private FlinkVertex createDataSinkVertex(SinkPlanNode node) throws CompilerException, IOException {
@@ -218,7 +211,7 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
         config.setStubWrapper(node.getPactContract().getUserCodeWrapper());
         config.setStubParameters(node.getPactContract().getParameters());
 
-        return new FlinkVertex(taskName, dop, config);
+        return new FlinkDataSinkVertex(taskName, dop, config);
     }
 
     private FlinkVertex createDataSourceVertex(SourcePlanNode node) throws CompilerException, IOException {
@@ -230,9 +223,19 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
         config.setStubWrapper(node.getPactContract().getUserCodeWrapper());
         config.setStubParameters(node.getPactContract().getParameters());
 
-        config.setOutputSerializer(node.getSerializer());
+        InputFormat format = node.getDataSourceNode().getPactContract().getFormatWrapper().getUserCodeObject();
+        FlinkInputSplitProvider inputSplitProvider = new FlinkInputSplitProvider(format, node.getDegreeOfParallelism());
+        config.setInputSplitProvider(inputSplitProvider);
 
-        return new FlinkVertex(taskName, dop, config);
+        return new FlinkDataSourceVertex(taskName, dop, config);
+    }
+
+    private FlinkVertex createUnionVertex(NAryUnionPlanNode node) throws CompletionException, IOException {
+        final String taskName = node.getNodeName();
+        final int dop = node.getDegreeOfParallelism();
+        final TezTaskConfig config= new TezTaskConfig(new Configuration());
+
+        return new FlinkUnionVertex (taskName, dop, config);
     }
 
 
@@ -250,6 +253,154 @@ public class TezDAGGenerator implements Visitor<PlanNode> {
             config.setRelativeMemoryInput(inputNum, c.getRelativeMemoryLocalStrategy());
             config.setFilehandlesInput(inputNum, this.defaultMaxFan);
             config.setSpillingThresholdInput(inputNum, this.defaultSortSpillingThreshold);
+        }
+    }
+
+    private int translateChannel(Channel input, int inputIndex, FlinkVertex targetVertex,
+                                 TezTaskConfig targetVertexConfig, boolean isBroadcast) throws Exception
+    {
+        final PlanNode inputPlanNode = input.getSource();
+        final Iterator<Channel> allInChannels;
+
+        //if (inputPlanNode instanceof NAryUnionPlanNode) {
+            //throw new CompilerException("The union operator is not supported currently.");
+        //    allInChannels = ((NAryUnionPlanNode) inputPlanNode).getListOfInputs().iterator();
+        //    while ()
+        //}
+        //else {
+            allInChannels = Collections.singletonList(input).iterator();
+        //}
+
+        // check that the type serializer is consistent
+        TypeSerializerFactory<?> typeSerFact = null;
+
+        while (allInChannels.hasNext()) {
+            final Channel inConn = allInChannels.next();
+
+            if (typeSerFact == null) {
+                typeSerFact = inConn.getSerializer();
+            } else if (!typeSerFact.equals(inConn.getSerializer())) {
+                throw new CompilerException("Conflicting types in union operator.");
+            }
+
+            final PlanNode sourceNode = inConn.getSource();
+            FlinkVertex sourceVertex = this.vertices.get(sourceNode);
+            TezTaskConfig sourceVertexConfig = sourceVertex.getConfig(); //TODO ??? need to create a new TezConfig ???
+
+            connectJobVertices(
+                    inConn, inputIndex, sourceVertex, sourceVertexConfig, targetVertex, targetVertexConfig, isBroadcast);
+        }
+
+        // the local strategy is added only once. in non-union case that is the actual edge,
+        // in the union case, it is the edge between union and the target node
+        addLocalInfoFromChannelToConfig(input, targetVertexConfig, inputIndex, isBroadcast);
+        return 1;
+    }
+
+    private void connectJobVertices(Channel channel, int inputNumber,
+                                                   final FlinkVertex sourceVertex, final TezTaskConfig sourceConfig,
+                                                   final FlinkVertex targetVertex, final TezTaskConfig targetConfig, boolean isBroadcast)
+            throws CompilerException {
+
+        // -------------- configure the source task's ship strategy strategies in task config --------------
+        final int outputIndex = sourceConfig.getNumOutputs();
+        sourceConfig.addOutputShipStrategy(channel.getShipStrategy());
+        if (outputIndex == 0) {
+            sourceConfig.setOutputSerializer(channel.getSerializer());
+        }
+        if (channel.getShipStrategyComparator() != null) {
+            sourceConfig.setOutputComparator(channel.getShipStrategyComparator(), outputIndex);
+        }
+
+        if (channel.getShipStrategy() == ShipStrategyType.PARTITION_RANGE) {
+
+            final DataDistribution dataDistribution = channel.getDataDistribution();
+            if(dataDistribution != null) {
+                sourceConfig.setOutputDataDistribution(dataDistribution, outputIndex);
+            } else {
+                throw new RuntimeException("Range partitioning requires data distribution");
+                // TODO: inject code and configuration for automatic histogram generation
+            }
+        }
+
+        // Tez-specific
+        sourceConfig.setNumberSubtasksInOutput(targetVertex.getParallelism());
+        targetVertex.addInput(sourceVertex, inputNumber);
+
+
+        // ---------------- configure the receiver -------------------
+        if (isBroadcast) {
+            targetConfig.addBroadcastInputToGroup(inputNumber);
+        } else {
+            targetConfig.addInputToGroup(inputNumber);
+        }
+
+        //----------------- connect source and target with edge ------------------------------
+
+        FlinkEdge edge;
+        ShipStrategyType shipStrategy = channel.getShipStrategy();
+        TypeSerializer<?> serializer = channel.getSerializer().getSerializer();
+        if ((shipStrategy == ShipStrategyType.FORWARD) || (shipStrategy == ShipStrategyType.NONE)) {
+            edge = new FlinkForwardEdge(sourceVertex, targetVertex, serializer);
+        }
+        else if (shipStrategy == ShipStrategyType.BROADCAST) {
+            throw new CompilerException("Broadcast edges are not supported yet");
+            //edge = new FlinkBroadcastEdge(sourceVertex, targetVertex, serializer);
+        }
+        else if (shipStrategy == ShipStrategyType.PARTITION_HASH) {
+            edge = new FlinkPartitionEdge(sourceVertex, targetVertex, serializer);
+        }
+        else {
+            throw new CompilerException("Ship strategy between nodes " + sourceVertex.getVertex().getName() + " and " + targetVertex.getVertex().getName() + " currently not supported");
+        }
+        edges.add(edge);
+    }
+
+    private void addLocalInfoFromChannelToConfig(Channel channel, TaskConfig config, int inputNum, boolean isBroadcastChannel) {
+        // serializer
+        if (isBroadcastChannel) {
+            config.setBroadcastInputSerializer(channel.getSerializer(), inputNum);
+
+            if (channel.getLocalStrategy() != LocalStrategy.NONE || (channel.getTempMode() != null && channel.getTempMode() != TempMode.NONE)) {
+                throw new CompilerException("Found local strategy or temp mode on a broadcast variable channel.");
+            } else {
+                return;
+            }
+        } else {
+            config.setInputSerializer(channel.getSerializer(), inputNum);
+        }
+
+        // local strategy
+        if (channel.getLocalStrategy() != LocalStrategy.NONE) {
+            config.setInputLocalStrategy(inputNum, channel.getLocalStrategy());
+            if (channel.getLocalStrategyComparator() != null) {
+                config.setInputComparator(channel.getLocalStrategyComparator(), inputNum);
+            }
+        }
+
+        assignLocalStrategyResources(channel, config, inputNum);
+
+        // materialization / caching
+        if (channel.getTempMode() != null) {
+            final TempMode tm = channel.getTempMode();
+
+            boolean needsMemory = false;
+            if (tm.breaksPipeline()) {
+                config.setInputAsynchronouslyMaterialized(inputNum, true);
+                needsMemory = true;
+            }
+            if (tm.isCached()) {
+                config.setInputCached(inputNum, true);
+                needsMemory = true;
+            }
+
+            if (needsMemory) {
+                // sanity check
+                if (tm == null || tm == TempMode.NONE || channel.getRelativeTempMemory() <= 0) {
+                    throw new CompilerException("Bug in compiler: Inconsistent description of input materialization.");
+                }
+                config.setRelativeInputMaterializationMemory(inputNum, channel.getRelativeTempMemory());
+            }
         }
     }
 }

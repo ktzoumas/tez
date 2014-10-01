@@ -1,6 +1,5 @@
-package org.apache.flink.tez.examples;
+package org.apache.flink.tez.examples_old;
 
-import org.apache.flink.api.common.JobExecutionResult;
 import org.apache.flink.api.common.Plan;
 import org.apache.flink.api.java.record.functions.FunctionAnnotation;
 import org.apache.flink.api.java.record.functions.MapFunction;
@@ -11,7 +10,6 @@ import org.apache.flink.api.java.record.operators.FileDataSink;
 import org.apache.flink.api.java.record.operators.FileDataSource;
 import org.apache.flink.api.java.record.operators.MapOperator;
 import org.apache.flink.api.java.record.operators.ReduceOperator;
-import org.apache.flink.client.LocalExecutor;
 import org.apache.flink.types.IntValue;
 import org.apache.flink.types.Record;
 import org.apache.flink.types.StringValue;

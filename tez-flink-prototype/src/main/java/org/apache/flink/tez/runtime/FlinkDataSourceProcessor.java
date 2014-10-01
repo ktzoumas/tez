@@ -20,6 +20,7 @@ import org.apache.tez.runtime.api.Event;
 import org.apache.tez.runtime.api.LogicalInput;
 import org.apache.tez.runtime.api.LogicalOutput;
 import org.apache.tez.runtime.api.ProcessorContext;
+import org.apache.tez.runtime.api.events.InputInitializerEvent;
 import org.apache.tez.runtime.library.api.KeyValueWriter;
 
 import java.util.ArrayList;

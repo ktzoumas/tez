@@ -69,20 +69,20 @@ public class MRInputAMSplitGenerator extends InputInitializer {
 
   @Override
   public List<Event> initialize() throws Exception {
-    Stopwatch sw = null;
-    if (LOG.isDebugEnabled()) {
-      sw = new Stopwatch().start();
-    }
+    //Stopwatch sw = null;
+    //if (LOG.isDebugEnabled()) {
+    //  sw = new Stopwatch().start();
+    //}
     MRInputUserPayloadProto userPayloadProto = MRInputHelpers
         .parseMRInputPayload(getContext().getInputUserPayload());
-    if (LOG.isDebugEnabled()) {
-      sw.stop();
-      LOG.debug("Time to parse MRInput payload into prot: "
-          + sw.elapsedMillis());
-    }
-    if (LOG.isDebugEnabled()) {
-      sw.reset().start();
-    }
+    //if (LOG.isDebugEnabled()) {
+    //  sw.stop();
+    //  LOG.debug("Time to parse MRInput payload into prot: "
+    //      + sw.elapsedMillis());
+    //}
+    //if (LOG.isDebugEnabled()) {
+    //  sw.reset().start();
+   // }
     Configuration conf = TezUtils.createConfFromByteString(userPayloadProto
         .getConfigurationBytes());
     
@@ -90,14 +90,14 @@ public class MRInputAMSplitGenerator extends InputInitializer {
         MRJobConfig.MR_TEZ_INPUT_INITIALIZER_SERIALIZE_EVENT_PAYLOAD,
         MRJobConfig.MR_TEZ_INPUT_INITIALIZER_SERIALIZE_EVENT_PAYLOAD_DEFAULT);
     LOG.info("Emitting serialized splits: " + sendSerializedEvents);
-    if (LOG.isDebugEnabled()) {
-      sw.stop();
-      LOG.debug("Time converting ByteString to configuration: " + sw.elapsedMillis());
-    }
+    //if (LOG.isDebugEnabled()) {
+    //  sw.stop();
+    //  LOG.debug("Time converting ByteString to configuration: " + sw.elapsedMillis());
+    //}
 
-    if (LOG.isDebugEnabled()) {
-      sw.reset().start();
-    }
+    //if (LOG.isDebugEnabled()) {
+    //  sw.reset().start();
+    //}
 
     int totalResource = getContext().getTotalAvailableResource().getMemory();
     int taskResource = getContext().getVertexTaskResource().getMemory();
@@ -123,10 +123,10 @@ public class MRInputAMSplitGenerator extends InputInitializer {
     } else {
       inputSplitInfo = MRInputHelpers.generateInputSplitsToMem(jobConf, false, 0);
     }
-    if (LOG.isDebugEnabled()) {
-      sw.stop();
-      LOG.debug("Time to create splits to mem: " + sw.elapsedMillis());
-    }
+    //if (LOG.isDebugEnabled()) {
+    //  sw.stop();
+    //  LOG.debug("Time to create splits to mem: " + sw.elapsedMillis());
+    //}
 
     List<Event> events = Lists.newArrayListWithCapacity(inputSplitInfo
         .getNumTasks() + 1);

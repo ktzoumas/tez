@@ -7,12 +7,16 @@ import org.apache.flink.util.InstantiationUtil;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.HashMap;
+import java.util.Map;
 
 public class TezTaskConfig extends TaskConfig {
 
     private static final String NUMBER_SUBTASKS_IN_OUTPUT = "tez.num_subtasks_in_output";
 
     private static final String INPUT_SPLIT_PROVIDER = "tez.input_split_provider";
+
+    private static final String INPUT_POSITIONS = "tez.input_positions";
 
     public TezTaskConfig(Configuration config) {
         super(config);
@@ -50,6 +54,32 @@ public class TezTaskConfig extends TaskConfig {
             throw new NullPointerException();
         }
         return inputSplitProvider;
+    }
+
+
+    public void setInputPositions(HashMap<String,Integer> inputPositions) {
+        try {
+            InstantiationUtil.writeObjectToConfig(inputPositions, this.config, INPUT_POSITIONS);
+        } catch (IOException e) {
+            throw new RuntimeException("Error while writing the input positions object to the task configuration.");
+        }
+    }
+
+    public HashMap<String,Integer> getInputPositions () {
+        HashMap<String,Integer> inputPositions = null;
+        try {
+            inputPositions = (HashMap) InstantiationUtil.readObjectFromConfig(this.config, INPUT_POSITIONS, getConfiguration().getClassLoader());
+        }
+        catch (IOException e) {
+            throw new RuntimeException("Error while reading the input positions object from the task configuration.");
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("Error while reading the input positions object from the task configuration. " +
+                    "ChannelSelector class not found.");
+        }
+        if (inputPositions == null) {
+            throw new NullPointerException();
+        }
+        return inputPositions;
     }
 
 }

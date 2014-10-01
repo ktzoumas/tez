@@ -12,7 +12,7 @@ public class TezRuntimeEnvironment {
     private final MemoryManager memoryManager;
 
     public TezRuntimeEnvironment() {
-        int numPages = 512;
+        int numPages = 2048;
         int pageSize = 32768;
         this.memoryManager = new DefaultMemoryManager(numPages * pageSize, 10, pageSize);
         this.ioManager = new IOManager();
