@@ -51,7 +51,7 @@ public class UnorderedPartitionedKVEdgeConfig
   private final UnorderedPartitionedKVOutputConfig outputConf;
   private final UnorderedKVInputConfig inputConf;
 
-  private UnorderedPartitionedKVEdgeConfig(
+  protected UnorderedPartitionedKVEdgeConfig(
       UnorderedPartitionedKVOutputConfig outputConfiguration,
       UnorderedKVInputConfig inputConfiguration) {
     this.outputConf = outputConfiguration;
@@ -153,16 +153,16 @@ public class UnorderedPartitionedKVEdgeConfig
   @InterfaceStability.Evolving
   public static class Builder extends HadoopKeyValuesBasedBaseEdgeConfig.Builder<Builder> {
 
-    private final UnorderedPartitionedKVOutputConfig.Builder outputBuilder =
+    protected final UnorderedPartitionedKVOutputConfig.Builder outputBuilder =
         new UnorderedPartitionedKVOutputConfig.Builder();
-    private final UnorderedPartitionedKVOutputConfig.SpecificBuilder<UnorderedPartitionedKVEdgeConfig.Builder>
+    protected final UnorderedPartitionedKVOutputConfig.SpecificBuilder<UnorderedPartitionedKVEdgeConfig.Builder>
         specificOutputBuilder =
         new UnorderedPartitionedKVOutputConfig.SpecificBuilder<UnorderedPartitionedKVEdgeConfig.Builder>(
             this, outputBuilder);
 
-    private final UnorderedKVInputConfig.Builder inputBuilder =
+    protected final UnorderedKVInputConfig.Builder inputBuilder =
         new UnorderedKVInputConfig.Builder();
-    private final UnorderedKVInputConfig.SpecificBuilder<UnorderedPartitionedKVEdgeConfig.Builder>
+    protected final UnorderedKVInputConfig.SpecificBuilder<UnorderedPartitionedKVEdgeConfig.Builder>
         specificInputBuilder =
         new UnorderedKVInputConfig.SpecificBuilder<UnorderedPartitionedKVEdgeConfig.Builder>(
             this, inputBuilder);
