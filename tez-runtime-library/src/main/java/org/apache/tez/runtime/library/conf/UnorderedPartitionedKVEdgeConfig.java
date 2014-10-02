@@ -168,7 +168,7 @@ public class UnorderedPartitionedKVEdgeConfig
             this, inputBuilder);
 
     @InterfaceAudience.Private
-    Builder(String keyClassName, String valueClassName, String partitionerClassName,
+    protected Builder(String keyClassName, String valueClassName, String partitionerClassName,
             Map<String, String> partitionerConf) {
       outputBuilder.setKeyClassName(keyClassName);
       outputBuilder.setValueClassName(valueClassName);
